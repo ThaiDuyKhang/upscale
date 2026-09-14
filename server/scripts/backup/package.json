@@ -1,0 +1,11 @@
+{
+  "name": "xuong-net-backup-gdrive",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Phụ thuộc riêng cho backup-gdrive-node.js — chỉ cần cài nếu bạn KHÔNG dùng rclone.",
+  "dependencies": {
+    "googleapis": "^144.0.0",
+    "dotenv": "^16.4.5"
+  }
+}

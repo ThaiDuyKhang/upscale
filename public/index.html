@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xưởng Nét — Nâng cấp ảnh bằng AI</title>
+<meta name="description" content="Nâng cấp chất lượng ảnh bằng công nghệ AI tiên tiến nhất (Real-ESRGAN). Làm nét ảnh mờ, phục hồi ảnh cũ nhanh chóng.">
+<meta name="keywords" content="nâng cấp ảnh, làm nét ảnh, AI upscale, Real-ESRGAN, phục hồi ảnh">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://xuongnet.com/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Xưởng Nét — Nâng cấp ảnh bằng AI">
+<meta property="og:description" content="Nâng cấp chất lượng ảnh bằng công nghệ AI tiên tiến nhất (Real-ESRGAN). Làm nét ảnh mờ, phục hồi ảnh cũ nhanh chóng.">
+<meta property="og:image" content="https://xuongnet.com/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://xuongnet.com/">
+<meta property="og:site_name" content="Xưởng Nét">
+<meta property="og:locale" content="vi_VN">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Xưởng Nét — Nâng cấp ảnh bằng AI">
+<meta name="twitter:description" content="Nâng cấp chất lượng ảnh bằng công nghệ AI tiên tiến nhất.">
+<meta name="twitter:image" content="https://xuongnet.com/og-image.jpg">
+
+<script type="application/ld+json" id="schemaOrg">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Xưởng Nét",
+  "url": "https://xuongnet.com/"
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap"></noscript>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: {
+      fontFamily: { sans: ['Inter','Roboto','system-ui','sans-serif'] },
+      colors: { brand: {50:'#ecfeff',100:'#cffafe',200:'#a5f3fc',300:'#67e8f9',400:'#22d3ee',500:'#06b6d4',600:'#0891b2',700:'#0e7490',800:'#155e75',900:'#164e63'} }
+    }}
+  }
+</script>
+<style type="text/tailwindcss">
+  input[type=range]{ accent-color:#06b6d4; }
+  ::selection{ background:#06b6d4; color:#fff; }
+  .card{ @apply rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900; }
+</style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans transition-colors">
+
+<header class="border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur z-40">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-8">
+      <div class="flex items-center gap-2.5 cursor-pointer" onclick="go('/')">
+        <div class="w-3 h-3 rounded-sm bg-brand-500 rotate-45"></div>
+        <span class="font-bold text-lg tracking-tight">Xưởng Nét</span>
+      </div>
+      <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300">
+        <a href="/" onclick="event.preventDefault(); go('/');" class="hover:text-brand-600 dark:hover:text-brand-400">Trang chủ</a>
+        <a href="/features" onclick="event.preventDefault(); go('/features');" class="hover:text-brand-600 dark:hover:text-brand-400">Tính năng</a>
+        <a href="/pricing" onclick="event.preventDefault(); go('/pricing');" class="hover:text-brand-600 dark:hover:text-brand-400">Bảng giá</a>
+        <a href="/contact" onclick="event.preventDefault(); go('/contact');" class="hover:text-brand-600 dark:hover:text-brand-400">Liên hệ</a>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3" id="headerActions"></div>
+  </div>
+</header>
+
+<main id="app" class="flex-grow max-w-6xl w-full mx-auto px-6 py-8"></main>
+
+<footer class="border-t border-slate-200 dark:border-slate-800 mt-auto">
+  <div class="max-w-6xl mx-auto px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+    <div class="flex justify-center gap-6 mb-4">
+      <a href="/" onclick="event.preventDefault(); go('/');" class="hover:text-brand-600 dark:hover:text-brand-400">Trang chủ</a>
+      <a href="/features" onclick="event.preventDefault(); go('/features');" class="hover:text-brand-600 dark:hover:text-brand-400">Tính năng</a>
+      <a href="/pricing" onclick="event.preventDefault(); go('/pricing');" class="hover:text-brand-600 dark:hover:text-brand-400">Bảng giá</a>
+      <a href="/contact" onclick="event.preventDefault(); go('/contact');" class="hover:text-brand-600 dark:hover:text-brand-400">Liên hệ</a>
+    </div>
+    <p>&copy; 2026 Xưởng Nét. Bảo lưu mọi quyền.</p>
+  </div>
+</footer>
+
+<script>
+"use strict";
+
+/* ============================================================ */
+/* THEME (in-memory only)                                        */
+/* ============================================================ */
+let isDark = false; // Mặc định chế độ sáng theo yêu cầu
+function applyTheme(){ document.documentElement.classList.toggle('dark', isDark); }
+applyTheme();
+function themeToggleBtn(){
+  const b = document.createElement('button');
+  b.className = 'inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-500 transition-colors text-slate-600 dark:text-slate-300';
+  b.innerHTML = isDark ? '<i data-lucide="sun" class="w-4 h-4"></i>' : '<i data-lucide="moon" class="w-4 h-4"></i>';
+  b.onclick = ()=>{ isDark=!isDark; applyTheme(); renderHeader(); };
+  return b;
+}
+
+/* ============================================================ */
+/* API HELPER                                                    */
+/* ============================================================ */
+async function api(path, opts={}){
+  const res = await fetch('/api'+path, {
+    method: opts.method || 'GET',
+    headers: {'Content-Type':'application/json'},
+    credentials: 'include',
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error || ('Lỗi '+res.status));
+  return data;
+}
+
+/* ============================================================ */
+/* SESSION STATE (in-memory; cookie is the real source of truth) */
+/* ============================================================ */
+let currentUser = null; // { id, email, role, credits }
+
+async function loadSession(){
+  try { currentUser = await api('/auth/me'); }
+  catch { currentUser = null; }
+}
+
+/* ============================================================ */
+/* ROUTER                                                        */
+/* ============================================================ */
+function go(path){ history.pushState({}, '', path); render(); }
+window.addEventListener('popstate', render);
+
+function updateSEO(config) {
+  document.title = config.title;
+  document.querySelector('meta[name="description"]').setAttribute('content', config.description);
+  document.querySelector('meta[property="og:title"]').setAttribute('content', config.title);
+  document.querySelector('meta[property="og:description"]').setAttribute('content', config.description);
+  document.querySelector('meta[name="twitter:title"]').setAttribute('content', config.title);
+  document.querySelector('meta[name="twitter:description"]').setAttribute('content', config.description);
+  
+  if (config.noindex) {
+    document.querySelector('meta[name="robots"]').setAttribute('content', 'noindex,nofollow');
+  } else {
+    document.querySelector('meta[name="robots"]').setAttribute('content', 'index,follow');
+  }
+
+  if (config.schema) {
+    document.getElementById('schemaOrg').textContent = JSON.stringify(config.schema);
+  }
+}
+
+const PUBLIC_ROUTES = ['/', '/features', '/pricing', '/contact'];
+const AUTH_ROUTES = ['/login', '/register'];
+
+async function render(){
+  renderHeader();
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="text-sm text-slate-500 dark:text-slate-400 py-20 text-center">Đang tải…</div>';
+  const path = location.pathname;
+
+  if (PUBLIC_ROUTES.includes(path)) {
+    if (path === '/') return renderHomeView(app);
+    if (path === '/features') return renderFeaturesView(app);
+    if (path === '/pricing') return renderPricingView(app);
+    if (path === '/contact') return renderContactView(app);
+  }
+
+  if (AUTH_ROUTES.includes(path)) {
+    if (currentUser) { go('/dashboard'); return; }
+    if (path === '/login') return renderAuthView(app, 'login');
+    if (path === '/register') return renderAuthView(app, 'register');
+  }
+
+  // Private routes
+  if (!currentUser) { go('/login'); return; }
+  
+  if (path === '/profile') return renderProfileView(app);
+  if (path === '/dashboard') return renderDashboardView(app);
+  
+  if (path === '/admin') {
+    if(currentUser.role !== 'admin'){ go('/'); return; }
+    renderAdminView(app);
+  } else {
+    app.innerHTML = '<div class="text-center py-20">Trang không tồn tại.</div>';
+  }
+
+  if (window.lucide) setTimeout(() => lucide.createIcons(), 0);
+}
+
+function renderHeader(){
+  const el = document.getElementById('headerActions');
+  el.innerHTML = '';
+  el.appendChild(themeToggleBtn());
+  if(currentUser){
+    const balance = document.createElement('span');
+    balance.className = 'text-sm font-semibold px-3 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 cursor-pointer';
+    balance.textContent = currentUser.credits + ' credit';
+    balance.onclick = () => go('/dashboard');
+    el.appendChild(balance);
+
+    const profileBtn = document.createElement('button');
+    profileBtn.className = 'text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-500';
+    profileBtn.textContent = 'Cá nhân';
+    profileBtn.onclick = ()=> go('/profile');
+    el.appendChild(profileBtn);
+
+    if(currentUser.role === 'admin'){
+      const adminBtn = document.createElement('button');
+      adminBtn.className = 'text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-500';
+      adminBtn.textContent = 'Admin';
+      adminBtn.onclick = ()=> go('/admin');
+      el.appendChild(adminBtn);
+    }
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-red-400 hover:text-red-500';
+    logoutBtn.textContent = 'Đăng xuất';
+    logoutBtn.onclick = async ()=>{ await api('/auth/logout',{method:'POST'}); currentUser=null; go('/'); };
+    el.appendChild(logoutBtn);
+  } else {
+    const loginBtn = document.createElement('button');
+    loginBtn.className = 'text-sm font-medium px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-500';
+    loginBtn.textContent = 'Đăng nhập';
+    loginBtn.onclick = ()=> go('/login');
+    el.appendChild(loginBtn);
+    
+    const regBtn = document.createElement('button');
+    regBtn.className = 'text-sm font-medium px-3 py-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600';
+    regBtn.textContent = 'Đăng ký miễn phí';
+    regBtn.onclick = ()=> go('/register');
+    el.appendChild(regBtn);
+  }
+}
+
+/* ============================================================ */
+/* PUBLIC VIEWS                                                  */
+/* ============================================================ */
+function renderHomeView(app) {
+  updateSEO({
+    title: 'Xưởng Nét — Nâng cấp ảnh bằng AI (Real-ESRGAN)',
+    description: 'Làm nét ảnh mờ, phục hồi ảnh cũ nhanh chóng với công nghệ AI tiên tiến. Nhận credit dùng thử miễn phí khi đăng ký.',
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Xưởng Nét",
+      "url": "https://xuongnet.com/"
+    }
+  });
+
+  app.innerHTML = `
+    <section class="text-center py-16 md:py-24">
+      <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight mb-6">Làm Nét Ảnh Bằng <span class="text-brand-500">AI</span></h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 mb-10 max-w-2xl mx-auto">Sử dụng công nghệ Real-ESRGAN tiên tiến nhất để phục hồi chi tiết, tăng độ phân giải và làm rõ ảnh mờ chỉ trong vài giây.</p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <button onclick="go('/register')" class="px-8 py-3.5 rounded-xl font-bold text-white bg-brand-500 hover:bg-brand-600 shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-1">Thử Miễn Phí Ngay</button>
+        <button onclick="go('/features')" class="px-8 py-3.5 rounded-xl font-bold border-2 border-slate-200 dark:border-slate-800 hover:border-brand-500 transition-all">Tìm Hiểu Thêm</button>
+      </div>
+    </section>
+
+    <section class="py-12 border-t border-slate-200 dark:border-slate-800">
+      <div class="grid md:grid-cols-3 gap-8 text-center">
+        <div class="card p-8">
+          <div class="w-12 h-12 bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 rounded-2xl mx-auto flex items-center justify-center text-xl mb-4">🚀</div>
+          <h3 class="font-bold text-lg mb-2">Nhanh Chóng</h3>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Xử lý ngay lập tức trên máy chủ GPU mạnh mẽ.</p>
+        </div>
+        <div class="card p-8">
+          <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-2xl mx-auto flex items-center justify-center text-xl mb-4">✨</div>
+          <h3 class="font-bold text-lg mb-2">Sắc Nét Tuyệt Đối</h3>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Model AI được huấn luyện chuyên sâu cho chi tiết khuôn mặt và cảnh vật.</p>
+        </div>
+        <div class="card p-8">
+          <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-2xl mx-auto flex items-center justify-center text-xl mb-4">🔒</div>
+          <h3 class="font-bold text-lg mb-2">Bảo Mật</h3>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Ảnh được tự động xóa sau khi xử lý để đảm bảo riêng tư.</p>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderFeaturesView(app) {
+  updateSEO({
+    title: 'Tính năng — Xưởng Nét',
+    description: 'Khám phá các tính năng nâng cấp ảnh bằng Real-ESRGAN, phục hồi khuôn mặt và tăng độ phân giải gấp 4 lần.',
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Xưởng Nét AI Upscaler",
+      "applicationCategory": "MultimediaApplication"
+    }
+  });
+
+  app.innerHTML = `
+    <div class="max-w-4xl mx-auto py-12">
+      <h1 class="text-3xl font-extrabold mb-4">Tính Năng Cốt Lõi</h1>
+      <p class="text-slate-600 dark:text-slate-400 mb-12">Khám phá sức mạnh của AI trong việc phục hồi và cải thiện chất lượng hình ảnh.</p>
+      
+      <div class="space-y-12">
+        <div class="flex flex-col md:flex-row gap-8 items-center card p-6">
+          <div class="flex-1">
+            <h3 class="text-xl font-bold mb-3">Tăng độ phân giải 4x (Real-ESRGAN)</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Không chỉ là phóng to, AI tái tạo lại các chi tiết bị mất, mang lại kết quả sắc nét bất ngờ ngay cả với những bức ảnh mờ nhất.</p>
+          </div>
+        </div>
+        <div class="flex flex-col md:flex-row-reverse gap-8 items-center card p-6">
+          <div class="flex-1">
+            <h3 class="text-xl font-bold mb-3">Tối ưu cho khuôn mặt (Face Enhancement)</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Nhận diện và phục hồi kết cấu da, mắt, tóc một cách tự nhiên. Rất phù hợp để phục hồi ảnh thẻ cũ hoặc ảnh kỷ niệm.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function renderPricingView(app) {
+  updateSEO({
+    title: 'Bảng giá — Xưởng Nét',
+    description: 'Mua credit nâng cấp ảnh với giá cả phải chăng. Thanh toán tự động qua mã QR.',
+  });
+
+  app.innerHTML = '<div class="text-center py-20">Đang tải bảng giá…</div>';
+  
+  try {
+    const settings = await api('/public/settings');
+    
+    app.innerHTML = `
+      <div class="max-w-3xl mx-auto py-12 text-center">
+        <h1 class="text-3xl font-extrabold mb-4">Bảng Giá Credit</h1>
+        <p class="text-slate-600 dark:text-slate-400 mb-10">Mỗi lượt nâng cấp ảnh tiêu tốn <strong>${settings.credits_per_upscale} credit</strong>. Thanh toán tự động 24/7.</p>
+        
+        <div class="card p-10 max-w-sm mx-auto">
+          <div class="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold mb-2">Tỷ giá</div>
+          <div class="text-4xl font-extrabold mb-6">${parseInt(settings.vnd_per_credit).toLocaleString('vi-VN')} đ <span class="text-lg font-medium text-slate-500">/ credit</span></div>
+          <ul class="text-sm text-left space-y-4 mb-8 text-slate-600 dark:text-slate-400">
+            <li class="flex gap-3"><span>✓</span> <span>Thanh toán quét mã QR (VietQR)</span></li>
+            <li class="flex gap-3"><span>✓</span> <span>Credit cộng ngay lập tức</span></li>
+            <li class="flex gap-3"><span>✓</span> <span>Không giới hạn thời gian sử dụng</span></li>
+          </ul>
+          <button onclick="go('/login')" class="w-full py-3 rounded-xl font-bold text-white bg-brand-500 hover:bg-brand-600 transition-colors">Bắt Đầu Ngay</button>
+        </div>
+      </div>
+    `;
+  } catch(e) {
+    app.innerHTML = '<div class="text-center py-20 text-red-500">Không thể tải bảng giá lúc này.</div>';
+  }
+}
+
+function renderContactView(app) {
+  updateSEO({
+    title: 'Liên hệ — Xưởng Nét',
+    description: 'Liên hệ với đội ngũ hỗ trợ của Xưởng Nét.',
+  });
+
+  app.innerHTML = `
+    <div class="max-w-xl mx-auto py-12">
+      <h1 class="text-3xl font-extrabold mb-4 text-center">Liên Hệ Hỗ Trợ</h1>
+      <p class="text-slate-600 dark:text-slate-400 mb-10 text-center">Bạn gặp vấn đề khi thanh toán hoặc nâng cấp ảnh? Hãy liên hệ với chúng tôi.</p>
+      
+      <div class="card p-8 space-y-6">
+        <div>
+          <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-1">Email</h3>
+          <p class="font-medium"><a href="mailto:support@xuongnet.com" class="text-brand-600 dark:text-brand-400">support@xuongnet.com</a></p>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-1">Zalo Hỗ Trợ (24/7)</h3>
+          <p class="font-medium"><a href="#" class="text-brand-600 dark:text-brand-400">0123 456 789</a></p>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-1">Địa chỉ</h3>
+          <p class="font-medium">123 Nguyễn Văn Linh, Đà Nẵng, Việt Nam</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderProfileView(app) {
+  updateSEO({
+    title: 'Thông tin cá nhân — Xưởng Nét',
+    description: 'Quản lý thông tin tài khoản của bạn.',
+    noindex: true
+  });
+
+  app.innerHTML = `
+    <div class="max-w-md mx-auto py-8">
+      <h1 class="text-2xl font-extrabold mb-6">Thông tin cá nhân</h1>
+      
+      <div class="card p-6 mb-6 space-y-4">
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-400">Email</div>
+          <div class="font-medium">${currentUser.email}</div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-400">Vai trò</div>
+          <div class="font-medium uppercase text-xs inline-block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 mt-1">${currentUser.role}</div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-400">Ngày đăng ký</div>
+          <div class="font-medium">${new Date(currentUser.created_at).toLocaleDateString('vi-VN')}</div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-500 dark:text-slate-400">Số dư Credit</div>
+          <div class="font-bold text-brand-600 dark:text-brand-400">${currentUser.credits} credit</div>
+        </div>
+      </div>
+
+      <div class="card p-6">
+        <h3 class="font-bold mb-4">Đổi mật khẩu</h3>
+        <form id="changePasswordForm" class="space-y-3">
+          <input required type="password" name="currentPassword" placeholder="Mật khẩu hiện tại" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+          <input required type="password" name="newPassword" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+          <div id="cpwMsg" class="text-xs hidden"></div>
+          <button class="w-full py-2.5 rounded-lg text-sm font-semibold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:opacity-90 transition-opacity">Lưu Mật Khẩu</button>
+        </form>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('changePasswordForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const msgBox = document.getElementById('cpwMsg');
+    msgBox.className = 'text-xs hidden';
+    try {
+      await api('/auth/change-password', {
+        method: 'POST',
+        body: { currentPassword: fd.get('currentPassword'), newPassword: fd.get('newPassword') }
+      });
+      msgBox.textContent = '✓ Đã đổi mật khẩu thành công.';
+      msgBox.className = 'text-xs text-emerald-500 block';
+      e.target.reset();
+    } catch(err) {
+      msgBox.textContent = err.message;
+      msgBox.className = 'text-xs text-red-500 block';
+    }
+  });
+}
+
+/* ============================================================ */
+/* AUTH VIEW                                                     */
+/* ============================================================ */
+function renderAuthView(app, mode){
+  updateSEO({
+    title: mode==='login' ? 'Đăng nhập — Xưởng Nét' : 'Đăng ký — Xưởng Nét',
+    description: 'Đăng nhập hoặc đăng ký tài khoản Xưởng Nét.',
+    noindex: true
+  });
+  app.innerHTML = `
+    <div class="max-w-sm mx-auto mt-10 card p-6">
+      <h1 class="text-xl font-extrabold mb-1">${mode==='login' ? 'Đăng nhập' : 'Tạo tài khoản'}</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-5">${mode==='login' ? 'Vào Xưởng Nét để nâng cấp ảnh bằng AI.' : 'Đăng ký để nhận credit dùng thử và nạp thêm khi cần.'}</p>
+      <form id="authForm" class="space-y-3">
+        <input required type="email" name="email" placeholder="Email" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <input required type="password" name="password" placeholder="Mật khẩu (tối thiểu 6 ký tự)" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+        <div id="authError" class="text-xs text-red-500 hidden"></div>
+        <button class="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-colors">${mode==='login' ? 'Đăng nhập' : 'Đăng ký'}</button>
+      </form>
+      <div class="text-xs text-slate-500 dark:text-slate-400 mt-4 text-center">
+        ${mode==='login'
+          ? `Chưa có tài khoản? <a href="/register" data-link class="text-brand-600 dark:text-brand-400 font-medium">Đăng ký</a>`
+          : `Đã có tài khoản? <a href="/login" data-link class="text-brand-600 dark:text-brand-400 font-medium">Đăng nhập</a>`}
+      </div>
+    </div>`;
+
+  app.querySelectorAll('[data-link]').forEach(a=> a.onclick = e=>{ e.preventDefault(); go(a.getAttribute('href')); });
+
+  document.getElementById('authForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const errBox = document.getElementById('authError');
+    errBox.classList.add('hidden');
+    try{
+      const endpoint = mode==='login' ? '/auth/login' : '/auth/register';
+      currentUser = await api(endpoint, { method:'POST', body:{ email: fd.get('email'), password: fd.get('password') } });
+      go('/');
+    }catch(err){
+      errBox.textContent = err.message;
+      errBox.classList.remove('hidden');
+    }
+  });
+}
+
+/* ============================================================ */
+/* USER DASHBOARD                                                */
+/* ============================================================ */
+async function renderDashboardView(app){
+  updateSEO({
+    title: 'Bảng điều khiển — Xưởng Nét',
+    description: 'Quản lý tài khoản và nâng cấp ảnh.',
+    noindex: true
+  });
+  app.innerHTML = `
+    <div class="grid md:grid-cols-[280px_1fr] gap-6 items-start">
+      <div class="space-y-5">
+        <div class="card p-5">
+          <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">Số dư</div>
+          <div class="text-3xl font-extrabold">${currentUser.credits}<span class="text-base font-medium text-slate-400"> credit</span></div>
+          <button id="openDepositBtn" class="mt-4 w-full py-2 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-colors">Nạp thêm</button>
+        </div>
+        <div class="card p-5">
+          <h3 class="text-sm font-semibold mb-3">Lịch sử giao dịch</h3>
+          <div id="txHistory" class="space-y-2 text-xs max-h-72 overflow-y-auto"></div>
+        </div>
+      </div>
+
+      <div class="card overflow-hidden">
+        <div class="p-5 border-b border-slate-200 dark:border-slate-800">
+          <h2 class="text-lg font-bold">Nâng cấp ảnh bằng AI</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mỗi lần xử lý tốn <span id="costLabel" class="font-semibold">…</span> credit — trừ khi xử lý thành công.</p>
+        </div>
+        <label id="dz" class="flex items-center gap-4 m-5 p-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 cursor-pointer transition-colors">
+          <div class="w-11 h-11 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center flex-none">↑</div>
+          <div>
+            <div class="text-sm font-semibold">Kéo ảnh vào đây, hoặc bấm để chọn</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">JPG, PNG, WebP — nên dưới 5MB</div>
+          </div>
+          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" class="hidden">
+        </label>
+        <div class="px-5" id="previewBody">
+          <div class="text-center text-sm text-slate-500 dark:text-slate-400 py-16">Chưa có ảnh nào được chọn.</div>
+        </div>
+        <div class="flex items-center justify-between gap-3 flex-wrap px-5 py-4 border-t border-slate-200 dark:border-slate-800 mt-2">
+          <span id="progress" class="text-xs text-slate-500 dark:text-slate-400"></span>
+          <div class="flex gap-2">
+            <button id="processBtn" disabled class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:border-brand-500 transition-colors">Nâng cấp bằng AI</button>
+            <button id="downloadBtn" disabled class="px-4 py-2 rounded-lg text-sm font-semibold bg-brand-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600 transition-colors">Tải ảnh về</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="depositModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div class="card p-6 max-w-sm w-full">
+        <h3 class="text-base font-bold mb-4">Nạp credit</h3>
+        <div id="depositStep1">
+          <input id="depositAmount" type="number" step="1000" placeholder="Số tiền (VNĐ)" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 mb-3">
+          <div id="depositError" class="text-xs text-red-500 hidden mb-3"></div>
+          <button id="createDepositBtn" class="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600">Tạo mã QR</button>
+        </div>
+        <div id="depositStep2" class="hidden text-center">
+          <img id="depositQr" class="mx-auto rounded-lg border border-slate-200 dark:border-slate-700 mb-3" style="width:220px;height:220px;">
+          <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">Chuyển khoản đúng số tiền, nội dung:</div>
+          <div id="depositCode" class="font-mono font-bold text-brand-600 dark:text-brand-400 mb-3"></div>
+          <div id="depositWaiting" class="text-xs text-slate-500 dark:text-slate-400 animate-pulse">Đang chờ thanh toán…</div>
+        </div>
+        <button id="closeDepositBtn" class="w-full mt-3 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">Đóng</button>
+      </div>
+    </div>
+  `;
+
+  // load settings (cost per upscale) — public-ish via a lightweight call using admin settings if admin,
+  // otherwise fall back to a sane default shown until the first upscale attempt reveals the real cost.
+  document.getElementById('costLabel').textContent = '5'; // giá trị mặc định hiển thị tạm; server luôn là nguồn sự thật khi xử lý ảnh
+
+  await loadTxHistory();
+  setupUploadAndProcess();
+  setupDepositModal();
+}
+
+async function loadTxHistory(){
+  const box = document.getElementById('txHistory');
+  try{
+    const data = await api('/wallet/transactions');
+    const items = data.items.filter(t => t.status !== 'pending'); // Bỏ giao dịch đang chờ
+    if(!items.length){ box.innerHTML = '<div class="text-slate-400">Chưa có giao dịch nào.</div>'; return; }
+    box.innerHTML = items.map(t=>{
+      const sign = t.credits_delta > 0 ? '+' : '';
+      const color = t.credits_delta > 0 ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400';
+      const label = t.type==='deposit' ? 'Nạp tiền' : t.type==='usage' ? 'Nâng cấp AI' : 'Admin điều chỉnh';
+      return `<div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+        <span>${label}</span>
+        <span class="${color} font-semibold">${sign}${t.credits_delta}</span>
+      </div>`;
+    }).join('');
+  }catch{ box.innerHTML = '<div class="text-red-400">Không tải được lịch sử.</div>'; }
+}
+
+function setupUploadAndProcess(){
+  const state = { file:null, url:null, name:'', resultURL:null };
+  const dz = document.getElementById('dz');
+  const fileInput = document.getElementById('fileInput');
+  const previewBody = document.getElementById('previewBody');
+  const progress = document.getElementById('progress');
+  const processBtn = document.getElementById('processBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  ['dragenter','dragover'].forEach(evt=> dz.addEventListener(evt, e=>{e.preventDefault(); dz.classList.add('border-brand-500');}));
+  ['dragleave','drop'].forEach(evt=> dz.addEventListener(evt, e=>{e.preventDefault(); dz.classList.remove('border-brand-500');}));
+  dz.addEventListener('drop', e=> loadFile(e.dataTransfer.files[0]));
+  fileInput.addEventListener('change', e=> loadFile(e.target.files[0]));
+
+  function loadFile(file){
+    if(!file || !file.type.startsWith('image/')) return;
+    state.file = file; state.name = file.name; state.resultURL = null;
+    state.url = URL.createObjectURL(file);
+    processBtn.disabled = false; downloadBtn.disabled = true;
+    renderPreview();
+  }
+
+  function renderPreview(){
+    if(!state.file){
+      previewBody.innerHTML = `<div class="text-center text-sm text-slate-500 dark:text-slate-400 py-16">Chưa có ảnh nào được chọn.</div>`;
+      return;
+    }
+    if(state.resultURL){
+      previewBody.innerHTML = `
+        <div class="relative w-full aspect-[4/3] bg-slate-100 dark:bg-slate-950 rounded-lg overflow-hidden select-none" id="compareBox">
+          <div class="absolute inset-0 flex items-center justify-center"><img src="${state.url}" class="max-w-full max-h-full object-contain" draggable="false"></div>
+          <div class="absolute inset-0 flex items-center justify-center" id="afterLayer" style="clip-path:inset(0 0 0 50%)"><img src="${state.resultURL}" class="max-w-full max-h-full object-contain" draggable="false"></div>
+          <span class="absolute top-3 left-3 text-[11px] font-bold px-2 py-1 rounded-full bg-black/60 text-white">trước</span>
+          <span class="absolute top-3 right-3 text-[11px] font-bold px-2 py-1 rounded-full bg-brand-600/90 text-white">sau</span>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-brand-500" id="handle" style="left:50%">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center shadow-lg cursor-ew-resize text-white text-xs">⇔</div>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mt-3 pb-2">Đã nâng cấp bằng Real-ESRGAN</div>`;
+      const box = document.getElementById('compareBox'), handle = document.getElementById('handle'), after = document.getElementById('afterLayer');
+      let dragging=false;
+      function setPos(x){ const r=box.getBoundingClientRect(); let p=Math.max(0,Math.min(100,((x-r.left)/r.width)*100)); handle.style.left=p+'%'; after.style.clipPath=`inset(0 0 0 ${p}%)`; }
+      handle.addEventListener('pointerdown', e=>{dragging=true; handle.setPointerCapture(e.pointerId);});
+      window.addEventListener('pointermove', e=>{if(dragging) setPos(e.clientX);});
+      window.addEventListener('pointerup', ()=> dragging=false);
+      box.addEventListener('click', e=>{ if(e.target===box) setPos(e.clientX); });
+    } else {
+      previewBody.innerHTML = `
+        <div class="rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-950 flex items-center justify-center" style="aspect-ratio:4/3">
+          <img src="${state.url}" class="max-w-full max-h-full object-contain">
+        </div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mt-3 pb-2">Ảnh gốc, chưa xử lý</div>`;
+    }
+  }
+
+  function fileToDataURL(file){
+    return new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = ()=> resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  processBtn.addEventListener('click', async ()=>{
+    if(!state.file) return;
+    processBtn.disabled = true;
+    progress.textContent = 'Đang gửi ảnh…';
+    try{
+      const dataUrl = await fileToDataURL(state.file);
+      progress.textContent = 'Mô hình đang xử lý…';
+      const data = await api('/upscale', { method:'POST', body:{ image: dataUrl, scale: 4, face_enhance: false } });
+      state.resultURL = data.outputUrl;
+      currentUser.credits = data.creditsRemaining;
+      renderHeader();
+      progress.textContent = `Hoàn tất — đã trừ ${data.creditsCharged} credit.`;
+      downloadBtn.disabled = false;
+      renderPreview();
+      loadTxHistory();
+    }catch(err){
+      progress.textContent = 'Lỗi: ' + err.message;
+    }finally{
+      processBtn.disabled = false;
+    }
+  });
+
+  downloadBtn.addEventListener('click', ()=>{
+    if(!state.resultURL) return;
+    const a = document.createElement('a');
+    a.href = state.resultURL; a.download = state.name.replace(/\.[^.]+$/,'')+'-ai.jpg';
+    a.click();
+  });
+}
+
+function setupDepositModal(){
+  const modal = document.getElementById('depositModal');
+  document.getElementById('openDepositBtn').onclick = ()=>{
+    modal.classList.remove('hidden');
+    document.getElementById('depositStep1').classList.remove('hidden');
+    document.getElementById('depositStep2').classList.add('hidden');
+    document.getElementById('depositError').classList.add('hidden');
+    document.getElementById('depositAmount').value = '';
+  };
+  document.getElementById('closeDepositBtn').onclick = ()=>{
+    modal.classList.add('hidden');
+    if(window.__depositPoll) clearInterval(window.__depositPoll);
+  };
+  document.getElementById('createDepositBtn').onclick = async ()=>{
+    const errBox = document.getElementById('depositError');
+    errBox.classList.add('hidden');
+    const amountVnd = parseInt(document.getElementById('depositAmount').value, 10);
+    try{
+      const dep = await api('/wallet/deposits', { method:'POST', body:{ amountVnd } });
+      document.getElementById('depositQr').src = dep.qrImageUrl;
+      document.getElementById('depositCode').textContent = dep.code;
+      document.getElementById('depositStep1').classList.add('hidden');
+      document.getElementById('depositStep2').classList.remove('hidden');
+
+      const initialCredits = currentUser.credits;
+
+      window.__depositPoll = setInterval(async ()=>{
+        try{
+          const me = await api('/auth/me');
+          if(me.credits > initialCredits){
+            clearInterval(window.__depositPoll);
+            document.getElementById('depositWaiting').textContent = '✓ Đã nhận thanh toán!';
+            currentUser = me;
+            renderHeader();
+            setTimeout(()=>{ modal.classList.add('hidden'); loadTxHistory(); }, 1200);
+          }
+        }catch{}
+      }, 4000);
+    }catch(err){
+      errBox.textContent = err.message;
+      errBox.classList.remove('hidden');
+    }
+  };
+}
+
+/* ============================================================ */
+/* ADMIN DASHBOARD                                                */
+/* ============================================================ */
+let currentAdminTab = 'dashboard';
+async function renderAdminView(app){
+  updateSEO({
+    title: 'Admin Dashboard — Xưởng Nét',
+    description: 'Quản trị viên.',
+    noindex: true
+  });
+  app.innerHTML = `<div class="text-sm text-slate-500 py-20 text-center">Đang tải…</div>`;
+  const [stats, settings, users, txs, usage] = await Promise.all([
+    api('/admin/stats'), api('/admin/settings'), api('/admin/users'), api('/admin/transactions'), api('/admin/usage')
+  ]);
+
+  function statCard(label, value){
+    return `<div class="card p-4"><div class="text-xs text-slate-500 dark:text-slate-400 mb-1">${label}</div><div class="text-xl font-extrabold">${value}</div></div>`;
+  }
+
+  app.innerHTML = `
+    <h1 class="text-xl font-extrabold mb-6">Bảng điều khiển Admin</h1>
+    <div class="flex flex-col md:flex-row gap-6 items-start">
+      <div class="w-full md:w-64 flex-shrink-0 card p-2 space-y-1">
+        <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="dashboard"><i data-lucide="bar-chart" class="w-4 h-4"></i> Thống kê</button>
+        <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="settings"><i data-lucide="settings" class="w-4 h-4"></i> Cấu hình giá</button>
+        <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="users"><i data-lucide="users" class="w-4 h-4"></i> Người dùng</button>
+        <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="transactions"><i data-lucide="credit-card" class="w-4 h-4"></i> Giao dịch</button>
+        <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="usage"><i data-lucide="image" class="w-4 h-4"></i> Nâng cấp AI</button>
+      </div>
+      <div class="flex-grow w-full min-w-0" id="adminContent"></div>
+    </div>
+  `;
+
+  const tabs = {
+    dashboard: () => `
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${statCard('Người dùng', stats.totalUsers)}
+        ${statCard('Doanh thu', stats.totalRevenueVnd.toLocaleString('vi-VN')+'đ')}
+        ${statCard('Credit đã phát hành', stats.totalCreditsIssued)}
+        ${statCard('Credit đã dùng', stats.totalCreditsSpent)}
+        ${statCard('Lượt nâng cấp hôm nay', stats.upscalesToday)}
+      </div>
+    `,
+    settings: () => `
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold mb-4">Cấu hình giá</h3>
+        <div class="grid sm:grid-cols-3 gap-3">
+          <label class="text-xs">
+            <div class="text-slate-500 dark:text-slate-400 mb-1">VNĐ / credit</div>
+            <input id="s_vnd" type="number" value="${settings.vnd_per_credit}" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
+          </label>
+          <label class="text-xs">
+            <div class="text-slate-500 dark:text-slate-400 mb-1">Credit / lượt nâng cấp AI</div>
+            <input id="s_cost" type="number" value="${settings.credits_per_upscale}" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
+          </label>
+          <label class="text-xs">
+            <div class="text-slate-500 dark:text-slate-400 mb-1">Nạp tối thiểu (VNĐ)</div>
+            <input id="s_min" type="number" value="${settings.min_deposit_vnd}" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
+          </label>
+        </div>
+        <button id="saveSettingsBtn" class="mt-4 px-4 py-2 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600">Lưu</button>
+        <span id="settingsMsg" class="text-xs text-emerald-500 ml-3 hidden">Đã lưu.</span>
+      </div>
+    `,
+    users: () => `
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold mb-4">Người dùng</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead><tr class="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+              <th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Vai trò</th><th class="py-2 pr-3">Credit</th><th class="py-2 pr-3">Ngày tạo</th><th class="py-2">Điều chỉnh</th>
+            </tr></thead>
+            <tbody>
+              ${users.items.map(u=>`
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2 pr-3">${u.email}</td>
+                  <td class="py-2 pr-3">${u.role}</td>
+                  <td class="py-2 pr-3 font-semibold">${u.credits}</td>
+                  <td class="py-2 pr-3 text-slate-400">${new Date(u.created_at).toLocaleDateString('vi-VN')}</td>
+                  <td class="py-2 flex items-center">
+                    <input type="number" placeholder="±credit" class="w-20 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-xs adjust-input" data-id="${u.id}">
+                    <button class="text-brand-600 dark:text-brand-400 font-medium ml-2 adjust-btn" data-id="${u.id}">Áp dụng</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `,
+    transactions: () => `
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold mb-4">Giao dịch gần đây</h3>
+        <div class="space-y-2 text-xs max-h-[500px] overflow-y-auto pr-2">
+          ${txs.items.filter(t => t.status !== 'pending').map(t=>`<div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+            <span>${t.email} · ${t.type}</span>
+            <span class="${t.credits_delta>0?'text-emerald-500':'text-slate-400'} font-semibold">${t.credits_delta>0?'+':''}${t.credits_delta}</span>
+          </div>`).join('') || '<div class="text-slate-400">Chưa có.</div>'}
+        </div>
+      </div>
+    `,
+    usage: () => `
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold mb-4">Lượt dùng AI gần đây</h3>
+        <div class="space-y-2 text-xs max-h-[500px] overflow-y-auto pr-2">
+          ${usage.items.map(u=>`<div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+            <span>${u.email} · ${u.status}</span>
+            <span class="text-slate-400">${u.credits_charged} credit</span>
+          </div>`).join('') || '<div class="text-slate-400">Chưa có.</div>'}
+        </div>
+      </div>
+    `
+  };
+
+  const adminContent = document.getElementById('adminContent');
+  const tabBtns = app.querySelectorAll('.admin-tab-btn');
+
+  function selectTab(tabId) {
+    currentAdminTab = tabId;
+    tabBtns.forEach(b => {
+      if (b.dataset.tab === tabId) {
+        b.className = 'admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-bold bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 transition-colors';
+      } else {
+        b.className = 'admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors';
+      }
+    });
+    adminContent.innerHTML = tabs[tabId]();
+    if (window.lucide) window.lucide.createIcons();
+    bindEvents(tabId);
+  }
+
+  function bindEvents(tabId) {
+    if (tabId === 'settings') {
+      document.getElementById('saveSettingsBtn').onclick = async ()=>{
+        try{
+          await api('/admin/settings', { method:'POST', body:{
+            vnd_per_credit: document.getElementById('s_vnd').value,
+            credits_per_upscale: document.getElementById('s_cost').value,
+            min_deposit_vnd: document.getElementById('s_min').value,
+          }});
+          const msg = document.getElementById('settingsMsg');
+          msg.classList.remove('hidden');
+          setTimeout(()=> msg.classList.add('hidden'), 2000);
+        }catch(err){ alert(err.message); }
+      };
+    } else if (tabId === 'users') {
+      document.querySelectorAll('.adjust-btn').forEach(btn=>{
+        btn.onclick = async ()=>{
+          const id = btn.dataset.id;
+          const input = document.querySelector(`.adjust-input[data-id="${id}"]`);
+          const delta = parseInt(input.value, 10);
+          if(!delta) return;
+          try{
+            await api(`/admin/users/${id}/adjust`, { method:'POST', body:{ delta, note:'Điều chỉnh từ Admin Dashboard' } });
+            renderAdminView(app);
+          }catch(err){ alert(err.message); }
+        };
+      });
+    }
+  }
+
+  tabBtns.forEach(b => b.onclick = () => selectTab(b.dataset.tab));
+  selectTab(currentAdminTab);
+}
+
+/* ============================================================ */
+/* BOOT                                                           */
+/* ============================================================ */
+(async function boot(){
+  await loadSession();
+  render();
+})();
+</script>
+</body>
+</html>
