@@ -60,7 +60,7 @@ adminRouter.get('/settings', (req, res) => {
 });
 
 adminRouter.post('/settings', (req, res) => {
-  const allowedKeys = ['vnd_per_credit', 'credits_per_upscale', 'min_deposit_vnd'];
+  const allowedKeys = ['vnd_per_credit', 'credits_per_upscale', 'min_deposit_vnd', 'canvas_free_per_day', 'credits_per_canvas_upscale'];
   const updates = req.body || {};
   for (const key of allowedKeys) {
     if (updates[key] !== undefined) {

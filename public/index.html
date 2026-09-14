@@ -93,16 +93,34 @@
 "use strict";
 
 /* ============================================================ */
-/* THEME (in-memory only)                                        */
+/* THEME (Default: Light mode, persistent in localStorage)      */
 /* ============================================================ */
-let isDark = false; // Mặc định chế độ sáng theo yêu cầu
-function applyTheme(){ document.documentElement.classList.toggle('dark', isDark); }
+let isDark = localStorage.getItem('theme') === 'dark'; // Mặc định là false (sáng)
+function applyTheme(){ 
+  document.documentElement.classList.toggle('dark', isDark); 
+  try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch(e){}
+}
 applyTheme();
+
 function themeToggleBtn(){
   const b = document.createElement('button');
-  b.className = 'inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-500 transition-colors text-slate-600 dark:text-slate-300';
-  b.innerHTML = isDark ? '<i data-lucide="sun" class="w-4 h-4"></i>' : '<i data-lucide="moon" class="w-4 h-4"></i>';
-  b.onclick = ()=>{ isDark=!isDark; applyTheme(); renderHeader(); };
+  b.id = 'themeToggleBtn';
+  b.className = 'inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-500 transition-colors shadow-sm';
+  b.setAttribute('title', isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối');
+  b.setAttribute('aria-label', 'Toggle theme');
+  
+  // Icon Lucide chuẩn bằng SVG trực tiếp:
+  // Chế độ tối: hiện icon mặt trời (Sun) màu vàng cam ấm áp text-amber-400
+  // Chế độ sáng: hiện icon mặt trăng (Moon) màu xám đậm sang trọng text-slate-700
+  b.innerHTML = isDark 
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun text-amber-400 hover:text-amber-300 transition-transform hover:rotate-45"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon text-slate-700 hover:text-brand-600 transition-transform hover:-rotate-12"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`;
+    
+  b.onclick = ()=>{ 
+    isDark = !isDark; 
+    applyTheme(); 
+    renderHeader(); 
+  };
   return b;
 }
 
@@ -166,32 +184,31 @@ async function render(){
   const path = location.pathname;
 
   if (PUBLIC_ROUTES.includes(path)) {
-    if (path === '/') return renderHomeView(app);
-    if (path === '/features') return renderFeaturesView(app);
-    if (path === '/pricing') return renderPricingView(app);
-    if (path === '/contact') return renderContactView(app);
-  }
-
-  if (AUTH_ROUTES.includes(path)) {
+    if (path === '/') renderHomeView(app);
+    else if (path === '/features') renderFeaturesView(app);
+    else if (path === '/pricing') renderPricingView(app);
+    else if (path === '/contact') renderContactView(app);
+  } else if (AUTH_ROUTES.includes(path)) {
     if (currentUser) { go('/dashboard'); return; }
-    if (path === '/login') return renderAuthView(app, 'login');
-    if (path === '/register') return renderAuthView(app, 'register');
-  }
-
-  // Private routes
-  if (!currentUser) { go('/login'); return; }
-  
-  if (path === '/profile') return renderProfileView(app);
-  if (path === '/dashboard') return renderDashboardView(app);
-  
-  if (path === '/admin') {
+    if (path === '/login') renderAuthView(app, 'login');
+    if (path === '/register') renderAuthView(app, 'register');
+  } else if (!currentUser) {
+    go('/login'); 
+    return;
+  } else if (path === '/profile') {
+    renderProfileView(app);
+  } else if (path === '/dashboard') {
+    renderDashboardView(app);
+  } else if (path === '/tool') {
+    renderToolView(app);
+  } else if (path === '/admin') {
     if(currentUser.role !== 'admin'){ go('/'); return; }
     renderAdminView(app);
   } else {
     app.innerHTML = '<div class="text-center py-20">Trang không tồn tại.</div>';
   }
 
-  if (window.lucide) setTimeout(() => lucide.createIcons(), 0);
+  if (window.lucide) setTimeout(() => { try { lucide.createIcons(); } catch(e){} }, 0);
 }
 
 function renderHeader(){
@@ -199,6 +216,12 @@ function renderHeader(){
   el.innerHTML = '';
   el.appendChild(themeToggleBtn());
   if(currentUser){
+    const toolBtn = document.createElement('button');
+    toolBtn.className = 'text-sm font-bold px-4 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors mr-2';
+    toolBtn.textContent = 'Công Cụ AI/GPU';
+    toolBtn.onclick = () => go('/tool');
+    el.appendChild(toolBtn);
+
     const balance = document.createElement('span');
     balance.className = 'text-sm font-semibold px-3 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 cursor-pointer';
     balance.textContent = currentUser.credits + ' credit';
@@ -235,6 +258,9 @@ function renderHeader(){
     regBtn.textContent = 'Đăng ký miễn phí';
     regBtn.onclick = ()=> go('/register');
     el.appendChild(regBtn);
+  }
+  if(window.lucide) {
+    try { lucide.createIcons(); } catch(e){}
   }
 }
 
@@ -323,28 +349,89 @@ function renderFeaturesView(app) {
 async function renderPricingView(app) {
   updateSEO({
     title: 'Bảng giá — Xưởng Nét',
-    description: 'Mua credit nâng cấp ảnh với giá cả phải chăng. Thanh toán tự động qua mã QR.',
+    description: 'Nâng cấp ảnh chất lượng cao. Chọn gói phù hợp với nhu cầu của bạn.',
   });
 
   app.innerHTML = '<div class="text-center py-20">Đang tải bảng giá…</div>';
   
   try {
     const settings = await api('/public/settings');
+    const vndPerCredit = parseInt(settings.vnd_per_credit).toLocaleString('vi-VN');
+    const canvasCost = parseInt(settings.credits_per_canvas_upscale);
+    const aiCost = parseInt(settings.credits_per_upscale);
+    const freeCanvas = parseInt(settings.canvas_free_per_day);
     
     app.innerHTML = `
-      <div class="max-w-3xl mx-auto py-12 text-center">
-        <h1 class="text-3xl font-extrabold mb-4">Bảng Giá Credit</h1>
-        <p class="text-slate-600 dark:text-slate-400 mb-10">Mỗi lượt nâng cấp ảnh tiêu tốn <strong>${settings.credits_per_upscale} credit</strong>. Thanh toán tự động 24/7.</p>
+      <div class="max-w-5xl mx-auto py-12 px-4">
+        <div class="text-center mb-12">
+          <h1 class="text-3xl font-extrabold mb-4">Bảng Giá Linh Hoạt</h1>
+          <p class="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">Sử dụng sức mạnh AI cao cấp hoặc dùng GPU máy tính của bạn với chi phí siêu rẻ. Nạp credit tự động 24/7 qua VietQR.</p>
+          <div class="inline-flex items-center gap-2 mt-6 px-4 py-2 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 rounded-full font-bold">
+            Tỷ giá: ${vndPerCredit}đ = 1 credit
+          </div>
+        </div>
         
-        <div class="card p-10 max-w-sm mx-auto">
-          <div class="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold mb-2">Tỷ giá</div>
-          <div class="text-4xl font-extrabold mb-6">${parseInt(settings.vnd_per_credit).toLocaleString('vi-VN')} đ <span class="text-lg font-medium text-slate-500">/ credit</span></div>
-          <ul class="text-sm text-left space-y-4 mb-8 text-slate-600 dark:text-slate-400">
-            <li class="flex gap-3"><span>✓</span> <span>Thanh toán quét mã QR (VietQR)</span></li>
-            <li class="flex gap-3"><span>✓</span> <span>Credit cộng ngay lập tức</span></li>
-            <li class="flex gap-3"><span>✓</span> <span>Không giới hạn thời gian sử dụng</span></li>
-          </ul>
-          <button onclick="go('/login')" class="w-full py-3 rounded-xl font-bold text-white bg-brand-500 hover:bg-brand-600 transition-colors">Bắt Đầu Ngay</button>
+        <div class="grid md:grid-cols-3 gap-6 items-start max-w-5xl mx-auto">
+          <!-- Gói Miễn phí -->
+          <div class="card p-8 flex flex-col h-full border-slate-200 dark:border-slate-800">
+            <h3 class="text-xl font-bold mb-2">Miễn Phí</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 min-h-[40px]">Làm nét cơ bản dùng thử mỗi ngày.</p>
+            <div class="text-3xl font-extrabold mb-6">0<span class="text-base font-normal text-slate-500">đ/lần</span></div>
+            <ul class="text-sm space-y-4 mb-8 flex-1 text-slate-600 dark:text-slate-400">
+              <li class="flex gap-3">
+                <span class="text-emerald-500">✓</span> <span>Giới hạn <strong>${freeCanvas} lượt/ngày</strong></span>
+              </li>
+              <li class="flex gap-3">
+                <span class="text-emerald-500">✓</span> <span>Dùng công nghệ <strong>Canvas GPU</strong></span>
+              </li>
+              <li class="flex gap-3 text-slate-400">
+                <span>✗</span> <span>Chất lượng không bằng AI</span>
+              </li>
+            </ul>
+            <button onclick="go('/')" class="w-full py-2.5 rounded-lg font-bold border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-colors">Dùng Thử Ngay</button>
+          </div>
+
+          <!-- Gói Canvas Pro -->
+          <div class="card p-8 flex flex-col h-full border-emerald-500/50 relative shadow-lg shadow-emerald-500/10">
+            <div class="absolute top-0 right-1/2 translate-x-1/2 -translate-y-1/2 px-3 py-1 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Tiết kiệm</div>
+            <h3 class="text-xl font-bold mb-2">Canvas Pro</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 min-h-[40px]">Dùng GPU của máy bạn, rẻ nhưng nhanh chóng.</p>
+            <div class="text-3xl font-extrabold mb-1">${(canvasCost * parseInt(settings.vnd_per_credit)).toLocaleString('vi-VN')}<span class="text-base font-normal text-slate-500">đ/lần</span></div>
+            <div class="text-sm text-emerald-600 dark:text-emerald-400 font-semibold mb-6">Chỉ ${canvasCost} credit / lần</div>
+            <ul class="text-sm space-y-4 mb-8 flex-1 text-slate-600 dark:text-slate-400">
+              <li class="flex gap-3">
+                <span class="text-emerald-500">✓</span> <span><strong>Không giới hạn</strong> số lần sử dụng</span>
+              </li>
+              <li class="flex gap-3">
+                <span class="text-emerald-500">✓</span> <span>Xử lý <strong>tức thì</strong> trên máy bạn</span>
+              </li>
+              <li class="flex gap-3">
+                <span class="text-emerald-500">✓</span> <span>Tốt nhất cho ảnh vector, logo</span>
+              </li>
+            </ul>
+            <button onclick="go('/login')" class="w-full py-2.5 rounded-lg font-bold text-emerald-700 dark:text-emerald-900 bg-emerald-100 hover:bg-emerald-200 transition-colors">Nạp Credit</button>
+          </div>
+
+          <!-- Gói AI Premium -->
+          <div class="card p-8 flex flex-col h-full border-brand-500/50 relative shadow-lg shadow-brand-500/10">
+            <div class="absolute top-0 right-1/2 translate-x-1/2 -translate-y-1/2 px-3 py-1 bg-brand-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Tốt nhất</div>
+            <h3 class="text-xl font-bold mb-2 text-brand-600 dark:text-brand-400">AI Premium</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 min-h-[40px]">Sức mạnh AI (Real-ESRGAN) từ máy chủ siêu tốc.</p>
+            <div class="text-3xl font-extrabold mb-1">${(aiCost * parseInt(settings.vnd_per_credit)).toLocaleString('vi-VN')}<span class="text-base font-normal text-slate-500">đ/lần</span></div>
+            <div class="text-sm text-brand-600 dark:text-brand-400 font-semibold mb-6">Tốn ${aiCost} credit / lần</div>
+            <ul class="text-sm space-y-4 mb-8 flex-1 text-slate-600 dark:text-slate-400">
+              <li class="flex gap-3">
+                <span class="text-brand-500">✓</span> <span>AI <strong>Real-ESRGAN</strong> tiên tiến</span>
+              </li>
+              <li class="flex gap-3">
+                <span class="text-brand-500">✓</span> <span>Chất lượng <strong>rõ nét, vượt trội</strong></span>
+              </li>
+              <li class="flex gap-3">
+                <span class="text-brand-500">✓</span> <span>Tốt nhất cho ảnh chân dung, ảnh cũ</span>
+              </li>
+            </ul>
+            <button onclick="go('/login')" class="w-full py-2.5 rounded-lg font-bold text-white bg-brand-500 hover:bg-brand-600 transition-colors">Trải Nghiệm AI</button>
+          </div>
         </div>
       </div>
     `;
@@ -352,6 +439,7 @@ async function renderPricingView(app) {
     app.innerHTML = '<div class="text-center py-20 text-red-500">Không thể tải bảng giá lúc này.</div>';
   }
 }
+
 
 function renderContactView(app) {
   updateSEO({
@@ -497,43 +585,37 @@ async function renderDashboardView(app){
     description: 'Quản lý tài khoản và nâng cấp ảnh.',
     noindex: true
   });
+
+  // Load canvas quota while rendering
+  let canvasQuota = { canUseFree: true, remainingFree: 1, freePerDay: 1, creditCost: 1, canUsePaid: false };
+  try { canvasQuota = await api('/wallet/canvas-quota'); } catch(e) {}
+
   app.innerHTML = `
-    <div class="grid md:grid-cols-[280px_1fr] gap-6 items-start">
+    <div class="max-w-4xl mx-auto grid md:grid-cols-2 gap-6 items-start">
       <div class="space-y-5">
         <div class="card p-5">
           <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">Số dư</div>
           <div class="text-3xl font-extrabold">${currentUser.credits}<span class="text-base font-medium text-slate-400"> credit</span></div>
           <button id="openDepositBtn" class="mt-4 w-full py-2 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-colors">Nạp thêm</button>
         </div>
+
+        <!-- Canvas GPU daily quota card -->
         <div class="card p-5">
-          <h3 class="text-sm font-semibold mb-3">Lịch sử giao dịch</h3>
-          <div id="txHistory" class="space-y-2 text-xs max-h-72 overflow-y-auto"></div>
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 text-sm">⚡</div>
+            <div class="text-sm font-semibold">Lượt Canvas GPU</div>
+          </div>
+          <div class="text-2xl font-extrabold ${canvasQuota.remainingFree > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}">${canvasQuota.remainingFree}<span class="text-sm font-medium text-slate-400">/${canvasQuota.freePerDay} miễn phí hôm nay</span></div>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">Hoặc dùng ${canvasQuota.creditCost} credit/lần (không giới hạn)</div>
+          <div class="mt-2 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
+            <div class="h-full rounded-full bg-emerald-500 transition-all" style="width:${Math.round((canvasQuota.remainingFree/canvasQuota.freePerDay)*100)}%"></div>
+          </div>
         </div>
       </div>
-
-      <div class="card overflow-hidden">
-        <div class="p-5 border-b border-slate-200 dark:border-slate-800">
-          <h2 class="text-lg font-bold">Nâng cấp ảnh bằng AI</h2>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mỗi lần xử lý tốn <span id="costLabel" class="font-semibold">…</span> credit — trừ khi xử lý thành công.</p>
-        </div>
-        <label id="dz" class="flex items-center gap-4 m-5 p-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 cursor-pointer transition-colors">
-          <div class="w-11 h-11 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center flex-none">↑</div>
-          <div>
-            <div class="text-sm font-semibold">Kéo ảnh vào đây, hoặc bấm để chọn</div>
-            <div class="text-xs text-slate-500 dark:text-slate-400">JPG, PNG, WebP — nên dưới 5MB</div>
-          </div>
-          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" class="hidden">
-        </label>
-        <div class="px-5" id="previewBody">
-          <div class="text-center text-sm text-slate-500 dark:text-slate-400 py-16">Chưa có ảnh nào được chọn.</div>
-        </div>
-        <div class="flex items-center justify-between gap-3 flex-wrap px-5 py-4 border-t border-slate-200 dark:border-slate-800 mt-2">
-          <span id="progress" class="text-xs text-slate-500 dark:text-slate-400"></span>
-          <div class="flex gap-2">
-            <button id="processBtn" disabled class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed hover:border-brand-500 transition-colors">Nâng cấp bằng AI</button>
-            <button id="downloadBtn" disabled class="px-4 py-2 rounded-lg text-sm font-semibold bg-brand-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600 transition-colors">Tải ảnh về</button>
-          </div>
-        </div>
+      
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold mb-3">Lịch sử giao dịch</h3>
+        <div id="txHistory" class="space-y-2 text-xs max-h-[300px] overflow-y-auto"></div>
       </div>
     </div>
 
@@ -556,25 +638,148 @@ async function renderDashboardView(app){
     </div>
   `;
 
-  // load settings (cost per upscale) — public-ish via a lightweight call using admin settings if admin,
-  // otherwise fall back to a sane default shown until the first upscale attempt reveals the real cost.
-  document.getElementById('costLabel').textContent = '5'; // giá trị mặc định hiển thị tạm; server luôn là nguồn sự thật khi xử lý ảnh
-
   await loadTxHistory();
-  setupUploadAndProcess();
   setupDepositModal();
 }
+
+/* ============================================================ */
+/* TOOL VIEW                                                     */
+/* ============================================================ */
+async function renderToolView(app) {
+  updateSEO({
+    title: 'Công cụ nâng cấp — Xưởng Nét',
+    description: 'Nâng cấp ảnh bằng AI Real-ESRGAN hoặc GPU.',
+    noindex: true
+  });
+
+  let canvasQuota = { canUseFree: true, remainingFree: 1, freePerDay: 1, creditCost: 1, canUsePaid: false };
+  try { canvasQuota = await api('/wallet/canvas-quota'); } catch(e) {}
+
+  const hasFreeLeft = canvasQuota.remainingFree > 0;
+
+  app.innerHTML = `
+    <div class="max-w-5xl mx-auto">
+      <div class="flex flex-col md:flex-row gap-5 items-start">
+
+        <!-- Cột trái: Bảng điều khiển -->
+        <div class="w-full md:w-64 flex-none space-y-4">
+
+          <div class="card p-5">
+            <h2 class="text-base font-bold mb-4">Cài đặt</h2>
+
+            <!-- Scale Slider -->
+            <div class="mb-5">
+              <div class="flex justify-between items-center mb-2">
+                <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Tỷ lệ phóng to</label>
+                <span id="scaleValue" class="text-lg font-extrabold text-brand-600 dark:text-brand-400">4x</span>
+              </div>
+              <input type="range" id="scaleSlider" min="2" max="6" step="2" value="4"
+                class="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand-500 bg-slate-200 dark:bg-slate-700">
+              <div class="flex justify-between text-[10px] text-slate-400 mt-1.5">
+                <span>2x</span><span class="text-brand-500 font-bold">4x</span><span>6x</span>
+              </div>
+            </div>
+
+            <!-- Face Enhance -->
+            <label class="flex items-center gap-3 cursor-pointer p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+              <input type="checkbox" id="faceEnhanceCheck" class="w-4 h-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800">
+              <div>
+                <div class="text-sm font-medium">Tối ưu khuôn mặt</div>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400">Face Enhance — Chỉ AI</div>
+              </div>
+            </label>
+          </div>
+
+          <div class="card p-5 space-y-2">
+            <!-- GPU section header -->
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+              <span class="flex items-center gap-1">⚡ Canvas GPU</span>
+              <span id="canvasQuotaLabel" class="font-semibold ${hasFreeLeft ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}">${ hasFreeLeft ? canvasQuota.remainingFree + '/' + canvasQuota.freePerDay + ' lượt miễn phí' : 'Hết miễn phí'}</span>
+            </div>
+
+            <!-- Free GPU checkbox -->
+            <label class="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-colors ${hasFreeLeft ? '' : 'opacity-40 pointer-events-none'}" id="freeGpuLabel">
+              <input type="checkbox" id="freeGpuCheck" class="w-4 h-4 mt-0.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400 dark:border-slate-600" ${hasFreeLeft ? '' : 'disabled'}>
+              <div>
+                <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Sử dụng lượt miễn phí</div>
+                <div class="text-[10px] text-slate-500 dark:text-slate-400">1 ảnh • 2x • Không Face Enhance</div>
+              </div>
+            </label>
+
+            <button id="canvasBtn" disabled
+              class="w-full py-2.5 rounded-lg text-sm font-semibold border border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 disabled:opacity-40 disabled:cursor-not-allowed hover:border-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+              ⚡ GPU (trả phí)
+            </button>
+            <button id="processBtn" disabled
+              class="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600 transition-colors">
+              ✨ AI Real-ESRGAN
+            </button>
+            <button id="downloadBtn" disabled
+              class="w-full py-2.5 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:border-brand-400 hover:text-brand-600 transition-colors">
+              ↓ Tải ảnh về
+            </button>
+            <p id="progress" class="text-[11px] text-slate-500 dark:text-slate-400 text-center min-h-[1.2em]"></p>
+          </div>
+
+          <div class="text-[11px] text-slate-400 dark:text-slate-600 space-y-1 px-1">
+            <div class="flex items-center gap-1.5">
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold">✨ AI</span>
+              Tối đa 5 ảnh/lần
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-bold">⚡ GPU trả phí</span>
+              Tối đa 5 ảnh/lần
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold">⚡ GPU miễn phí</span>
+              1 ảnh, tối đa 2x
+            </div>
+          </div>
+        </div>
+
+        <!-- Cột phải: Kéo thả & Preview -->
+        <div class="flex-1 min-w-0 space-y-4">
+          <!-- Drop zone -->
+          <label id="dz" class="card flex items-center gap-4 p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 cursor-pointer transition-colors">
+            <div class="w-11 h-11 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center flex-none text-xl">↑</div>
+            <div class="flex-1">
+              <div class="text-sm font-semibold">Kéo ảnh vào đây, hoặc bấm để chọn</div>
+              <div id="dzSubtext" class="text-xs text-slate-500 dark:text-slate-400">JPG, PNG, WebP — Tối đa 5 ảnh, mỗi ảnh dưới 5MB</div>
+            </div>
+            <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" multiple class="hidden">
+          </label>
+
+          <!-- Image grid preview -->
+          <div id="previewBody"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Slider label update
+  const slider = document.getElementById('scaleSlider');
+  const scaleValue = document.getElementById('scaleValue');
+  slider.addEventListener('input', () => {
+    scaleValue.textContent = slider.value + 'x';
+  });
+
+  setupUploadAndProcess(canvasQuota);
+}
+
 
 async function loadTxHistory(){
   const box = document.getElementById('txHistory');
   try{
     const data = await api('/wallet/transactions');
-    const items = data.items.filter(t => t.status !== 'pending'); // Bỏ giao dịch đang chờ
+    const items = data.items.filter(t => t.status !== 'pending');
     if(!items.length){ box.innerHTML = '<div class="text-slate-400">Chưa có giao dịch nào.</div>'; return; }
     box.innerHTML = items.map(t=>{
       const sign = t.credits_delta > 0 ? '+' : '';
       const color = t.credits_delta > 0 ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400';
-      const label = t.type==='deposit' ? 'Nạp tiền' : t.type==='usage' ? 'Nâng cấp AI' : 'Admin điều chỉnh';
+      const label = t.type==='deposit' ? 'Nạp tiền' 
+                  : t.type==='usage' ? 'Nâng cấp AI' 
+                  : t.type==='canvas_usage' ? '⚡ Canvas GPU'
+                  : 'Admin điều chỉnh';
       return `<div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
         <span>${label}</span>
         <span class="${color} font-semibold">${sign}${t.credits_delta}</span>
@@ -583,97 +788,424 @@ async function loadTxHistory(){
   }catch{ box.innerHTML = '<div class="text-red-400">Không tải được lịch sử.</div>'; }
 }
 
-function setupUploadAndProcess(){
-  const state = { file:null, url:null, name:'', resultURL:null };
+// ─── Canvas/GPU Upscale Engine ────────────────────────────────────────────────
+// Dùng WebGL fragment shader (GPU) hoặc Canvas 2D để phóng to ảnh bằng thuật toán
+// Bicubic / Lanczos — nhanh, chạy offline, không tốn server, nhưng chất lượng thấp hơn Real-ESRGAN.
+function canvasUpscale(file, scale = 2) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const W = img.naturalWidth * scale;
+      const H = img.naturalHeight * scale;
+
+      // Try WebGL with Bicubic shader first
+      const glCanvas = document.createElement('canvas');
+      glCanvas.width = W; glCanvas.height = H;
+      const gl = glCanvas.getContext('webgl') || glCanvas.getContext('experimental-webgl');
+
+      if (gl) {
+        const vsSource = `
+          attribute vec2 a_position;
+          varying vec2 v_texCoord;
+          void main() {
+            gl_Position = vec4(a_position * 2.0 - 1.0, 0.0, 1.0);
+            v_texCoord = vec2(a_position.x, 1.0 - a_position.y);
+          }`;
+        const fsSource = `
+          precision highp float;
+          uniform sampler2D u_image;
+          uniform vec2 u_resolution;
+          varying vec2 v_texCoord;
+          vec4 cubic(float v, vec4 c0, vec4 c1, vec4 c2, vec4 c3) {
+            vec4 r = c1 + 0.5 * v * (c2 - c0 + v * (2.0*c0 - 5.0*c1 + 4.0*c2 - c3 + v * (3.0*(c1-c2) + c3 - c0)));
+            return clamp(r, 0.0, 1.0);
+          }
+          void main() {
+            vec2 texelSize = 1.0 / u_resolution;
+            vec2 uv = v_texCoord;
+            vec2 pixel = uv * u_resolution - 0.5;
+            vec2 f = fract(pixel);
+            vec2 p = (floor(pixel) + 0.5) * texelSize;
+            vec4 r0 = cubic(f.x,
+              texture2D(u_image, p + texelSize * vec2(-1,-1)),
+              texture2D(u_image, p + texelSize * vec2( 0,-1)),
+              texture2D(u_image, p + texelSize * vec2( 1,-1)),
+              texture2D(u_image, p + texelSize * vec2( 2,-1)));
+            vec4 r1 = cubic(f.x,
+              texture2D(u_image, p + texelSize * vec2(-1, 0)),
+              texture2D(u_image, p + texelSize * vec2( 0, 0)),
+              texture2D(u_image, p + texelSize * vec2( 1, 0)),
+              texture2D(u_image, p + texelSize * vec2( 2, 0)));
+            vec4 r2 = cubic(f.x,
+              texture2D(u_image, p + texelSize * vec2(-1, 1)),
+              texture2D(u_image, p + texelSize * vec2( 0, 1)),
+              texture2D(u_image, p + texelSize * vec2( 1, 1)),
+              texture2D(u_image, p + texelSize * vec2( 2, 1)));
+            vec4 r3 = cubic(f.x,
+              texture2D(u_image, p + texelSize * vec2(-1, 2)),
+              texture2D(u_image, p + texelSize * vec2( 0, 2)),
+              texture2D(u_image, p + texelSize * vec2( 1, 2)),
+              texture2D(u_image, p + texelSize * vec2( 2, 2)));
+            gl_FragColor = cubic(f.y, r0, r1, r2, r3);
+          }`;
+
+        function compileShader(src, type) {
+          const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s;
+        }
+        const prog = gl.createProgram();
+        gl.attachShader(prog, compileShader(vsSource, gl.VERTEX_SHADER));
+        gl.attachShader(prog, compileShader(fsSource, gl.FRAGMENT_SHADER));
+        gl.linkProgram(prog); gl.useProgram(prog);
+
+        // Full-screen quad
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0,1,0,0,1,0,1,1,0,1,1]), gl.STATIC_DRAW);
+        const loc = gl.getAttribLocation(prog, 'a_position');
+        gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+        // Texture
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+        gl.uniform1i(gl.getUniformLocation(prog, 'u_image'), 0);
+        gl.uniform2f(gl.getUniformLocation(prog, 'u_resolution'), img.naturalWidth, img.naturalHeight);
+        gl.viewport(0, 0, W, H);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        resolve(glCanvas.toDataURL('image/jpeg', 0.95));
+      } else {
+        // Fallback: Canvas 2D high-quality
+        const c2 = document.createElement('canvas');
+        c2.width = W; c2.height = H;
+        const ctx = c2.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, W, H);
+        resolve(c2.toDataURL('image/jpeg', 0.95));
+      }
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function setupUploadAndProcess(canvasQuota) {
+  const images = [];
+  const MAX_IMAGES = 5;
+  const FREE_MAX = 1;
+
   const dz = document.getElementById('dz');
   const fileInput = document.getElementById('fileInput');
   const previewBody = document.getElementById('previewBody');
   const progress = document.getElementById('progress');
   const processBtn = document.getElementById('processBtn');
+  const canvasBtn = document.getElementById('canvasBtn');
   const downloadBtn = document.getElementById('downloadBtn');
+  const slider = document.getElementById('scaleSlider');
+  const scaleValue = document.getElementById('scaleValue');
+  const faceEnhanceCheck = document.getElementById('faceEnhanceCheck');
+  const freeGpuCheck = document.getElementById('freeGpuCheck');
+  const dzSubtext = document.getElementById('dzSubtext');
 
-  ['dragenter','dragover'].forEach(evt=> dz.addEventListener(evt, e=>{e.preventDefault(); dz.classList.add('border-brand-500');}));
-  ['dragleave','drop'].forEach(evt=> dz.addEventListener(evt, e=>{e.preventDefault(); dz.classList.remove('border-brand-500');}));
-  dz.addEventListener('drop', e=> loadFile(e.dataTransfer.files[0]));
-  fileInput.addEventListener('change', e=> loadFile(e.target.files[0]));
+  function isFreeMode() { return freeGpuCheck && freeGpuCheck.checked; }
+  function getScale() { return parseInt(slider.value, 10); }
+  function getFaceEnhance() { return faceEnhanceCheck && faceEnhanceCheck.checked; }
 
-  function loadFile(file){
-    if(!file || !file.type.startsWith('image/')) return;
-    state.file = file; state.name = file.name; state.resultURL = null;
-    state.url = URL.createObjectURL(file);
-    processBtn.disabled = false; downloadBtn.disabled = true;
+  // Apply/remove free-mode UI constraints
+  function applyFreeMode(isFree) {
+    if (isFree) {
+      // Lock slider to 2x
+      slider.value = '2';
+      slider.max = '2';
+      scaleValue.textContent = '2x';
+      slider.classList.add('opacity-50', 'pointer-events-none');
+      // Lock face enhance
+      faceEnhanceCheck.checked = false;
+      faceEnhanceCheck.disabled = true;
+      faceEnhanceCheck.closest('label').classList.add('opacity-40', 'pointer-events-none');
+      // Update GPU button label
+      if (canvasBtn) canvasBtn.textContent = '⚡ GPU (Miễn phí)';
+      // Update dropzone hint
+      if (dzSubtext) dzSubtext.textContent = 'GPU miễn phí: chỉ 1 ảnh, tối đa 2x';
+    } else {
+      // Unlock slider
+      slider.max = '6';
+      slider.value = '4';
+      scaleValue.textContent = '4x';
+      slider.classList.remove('opacity-50', 'pointer-events-none');
+      // Unlock face enhance
+      faceEnhanceCheck.disabled = false;
+      faceEnhanceCheck.closest('label').classList.remove('opacity-40', 'pointer-events-none');
+      // Update GPU button label
+      if (canvasBtn) canvasBtn.textContent = '⚡ GPU (trả phí)';
+      // Update dropzone hint
+      if (dzSubtext) dzSubtext.textContent = 'JPG, PNG, WebP — Tối đa 5 ảnh, mỗi ảnh dưới 5MB';
+    }
+    renderPreview(); // re-render to apply overlay warnings
+  }
+
+  if (freeGpuCheck) {
+    freeGpuCheck.addEventListener('change', () => applyFreeMode(freeGpuCheck.checked));
+  }
+
+  ['dragenter','dragover'].forEach(evt => dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.add('border-brand-500'); }));
+  ['dragleave','drop'].forEach(evt => dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.remove('border-brand-500'); }));
+  dz.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+  fileInput.addEventListener('change', e => addFiles(e.target.files));
+
+  function addFiles(fileList) {
+    const arr = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+    const limit = isFreeMode() ? FREE_MAX : MAX_IMAGES;
+    const remaining = limit - images.length;
+    arr.slice(0, remaining).forEach(f => {
+      images.push({ file: f, name: f.name, url: URL.createObjectURL(f), resultURL: null, status: 'waiting', errorMsg: '' });
+    });
+    if (arr.length > remaining) {
+      progress.textContent = `Chỉ tối đa ${limit} ảnh được phép ở chế độ này.`;
+    } else {
+      progress.textContent = '';
+    }
+    fileInput.value = '';
+    updateActionButtons();
     renderPreview();
   }
 
-  function renderPreview(){
-    if(!state.file){
+  function replaceImage(index) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.onchange = e => {
+      const f = e.target.files[0];
+      if (!f || !f.type.startsWith('image/')) return;
+      URL.revokeObjectURL(images[index].url);
+      if (images[index].resultURL) URL.revokeObjectURL(images[index].resultURL);
+      images[index] = { file: f, name: f.name, url: URL.createObjectURL(f), resultURL: null, status: 'waiting', errorMsg: '' };
+      updateActionButtons();
+      renderPreview();
+    };
+    input.click();
+  }
+
+  function removeImage(index) {
+    URL.revokeObjectURL(images[index].url);
+    if (images[index].resultURL) URL.revokeObjectURL(images[index].resultURL);
+    images.splice(index, 1);
+    updateActionButtons();
+    renderPreview();
+  }
+
+  function updateActionButtons() {
+    const hasImages = images.length > 0;
+    processBtn.disabled = !hasImages;
+    if (canvasBtn) canvasBtn.disabled = !hasImages;
+    const hasDone = images.some(i => i.status === 'done');
+    downloadBtn.disabled = !hasDone;
+  }
+
+  function renderPreview() {
+    const freeLocked = isFreeMode();
+    if (!images.length) {
       previewBody.innerHTML = `<div class="text-center text-sm text-slate-500 dark:text-slate-400 py-16">Chưa có ảnh nào được chọn.</div>`;
       return;
     }
-    if(state.resultURL){
-      previewBody.innerHTML = `
-        <div class="relative w-full aspect-[4/3] bg-slate-100 dark:bg-slate-950 rounded-lg overflow-hidden select-none" id="compareBox">
-          <div class="absolute inset-0 flex items-center justify-center"><img src="${state.url}" class="max-w-full max-h-full object-contain" draggable="false"></div>
-          <div class="absolute inset-0 flex items-center justify-center" id="afterLayer" style="clip-path:inset(0 0 0 50%)"><img src="${state.resultURL}" class="max-w-full max-h-full object-contain" draggable="false"></div>
-          <span class="absolute top-3 left-3 text-[11px] font-bold px-2 py-1 rounded-full bg-black/60 text-white">trước</span>
-          <span class="absolute top-3 right-3 text-[11px] font-bold px-2 py-1 rounded-full bg-brand-600/90 text-white">sau</span>
-          <div class="absolute top-0 bottom-0 w-0.5 bg-brand-500" id="handle" style="left:50%">
-            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center shadow-lg cursor-ew-resize text-white text-xs">⇔</div>
-          </div>
-        </div>
-        <div class="text-xs text-slate-500 dark:text-slate-400 mt-3 pb-2">Đã nâng cấp bằng Real-ESRGAN</div>`;
-      const box = document.getElementById('compareBox'), handle = document.getElementById('handle'), after = document.getElementById('afterLayer');
-      let dragging=false;
-      function setPos(x){ const r=box.getBoundingClientRect(); let p=Math.max(0,Math.min(100,((x-r.left)/r.width)*100)); handle.style.left=p+'%'; after.style.clipPath=`inset(0 0 0 ${p}%)`; }
-      handle.addEventListener('pointerdown', e=>{dragging=true; handle.setPointerCapture(e.pointerId);});
-      window.addEventListener('pointermove', e=>{if(dragging) setPos(e.clientX);});
-      window.addEventListener('pointerup', ()=> dragging=false);
-      box.addEventListener('click', e=>{ if(e.target===box) setPos(e.clientX); });
-    } else {
-      previewBody.innerHTML = `
-        <div class="rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-950 flex items-center justify-center" style="aspect-ratio:4/3">
-          <img src="${state.url}" class="max-w-full max-h-full object-contain">
-        </div>
-        <div class="text-xs text-slate-500 dark:text-slate-400 mt-3 pb-2">Ảnh gốc, chưa xử lý</div>`;
-    }
+    const limit = freeLocked ? FREE_MAX : MAX_IMAGES;
+    previewBody.innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="imgGrid">
+        ${images.map((img, i) => {
+          const isOverLimit = freeLocked && i >= FREE_MAX;
+          return `
+            <div class="relative group rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-900 aspect-square border-2 ${
+              isOverLimit ? 'border-red-400' :
+              img.status === 'done' ? 'border-emerald-500' :
+              img.status === 'error' ? 'border-red-400' :
+              img.status === 'processing' ? 'border-brand-400 animate-pulse' :
+              'border-transparent'
+            }" data-index="${i}">
+              <img src="${img.resultURL || img.url}" class="w-full h-full object-cover">
+              
+              ${ isOverLimit ? `
+                <!-- Free mode overlay warning -->
+                <div class="absolute inset-0 bg-black/40 flex items-end justify-center pb-2 pointer-events-none">
+                  <span class="text-[11px] font-bold px-2 py-1 rounded bg-amber-400 text-black">⚠ Miễn phí chỉ được tải lên 1 ảnh</span>
+                </div>` : '' }
+
+              ${ !isOverLimit ? (`
+                ${ img.status === 'done' ? '<span class="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">✓ Hoàn tất</span>' :
+                   img.status === 'processing' ? '<span class="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-500 text-white">Đang xử lý…</span>' :
+                   img.status === 'error' ? '<span class="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white" title="'+img.errorMsg+'">✗ Lỗi</span>' : '' }
+              `) : '' }
+
+              <!-- Hover overlay with action buttons (always show) -->
+              <div class="absolute inset-0 ${isOverLimit ? 'bg-transparent' : 'bg-black/0 group-hover:bg-black/30'} transition-colors flex items-start justify-end p-2 gap-1.5 ${isOverLimit ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}">
+                <!-- Đổi ảnh khác -->
+                ${ !isOverLimit ? `<button onclick="window.__toolReplaceImage(${i})" class="w-8 h-8 rounded-full bg-white/90 hover:bg-white text-slate-700 flex items-center justify-center shadow-lg transition-all" title="Đổi ảnh khác">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                </button>` : '' }
+                <!-- Xóa -->
+                <button onclick="window.__toolRemoveImage(${i})" class="w-8 h-8 rounded-full bg-red-500/90 hover:bg-red-500 text-white flex items-center justify-center shadow-lg transition-all" title="Xóa ảnh">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
+
+              ${ img.status === 'done' && !isOverLimit ? `
+                <button onclick="window.__toolDownloadOne(${i})" class="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg transition-all" title="Tải về">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m19 9-7 6-7-6"/><path d="M19 21H5"/></svg>
+                </button>` : '' }
+            </div>
+          `;
+        }).join('')}
+        ${ images.length < limit ? `
+          <label class="flex flex-col items-center justify-center aspect-square rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-400 cursor-pointer transition-colors text-slate-400 hover:text-brand-500">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            <span class="text-xs mt-1">Thêm ảnh</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp" multiple class="hidden" id="addMoreInput">
+          </label>` : '' }
+      </div>
+    `;
+
+    const addMore = document.getElementById('addMoreInput');
+    if (addMore) addMore.addEventListener('change', e => addFiles(e.target.files));
+
+    window.__toolReplaceImage = (i) => replaceImage(i);
+    window.__toolRemoveImage = (i) => removeImage(i);
+    window.__toolDownloadOne = (i) => {
+      if (!images[i] || !images[i].resultURL) return;
+      const a = document.createElement('a');
+      a.href = images[i].resultURL;
+      a.download = images[i].name.replace(/\.[^.]+$/, '') + '-upscaled.jpg';
+      a.click();
+    };
   }
 
-  function fileToDataURL(file){
-    return new Promise((resolve,reject)=>{
+  function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
       const r = new FileReader();
-      r.onload = ()=> resolve(r.result);
+      r.onload = () => resolve(r.result);
       r.onerror = reject;
       r.readAsDataURL(file);
     });
   }
 
-  processBtn.addEventListener('click', async ()=>{
-    if(!state.file) return;
+  processBtn.addEventListener('click', async () => {
+    if (!images.length) return;
+    const scale = getScale();
+    const face_enhance = getFaceEnhance();
+
+    const toProcess = images.filter(i => i.status === 'waiting' || i.status === 'error');
+    if (!toProcess.length) { progress.textContent = 'Không có ảnh nào cần xử lý.'; return; }
+
     processBtn.disabled = true;
-    progress.textContent = 'Đang gửi ảnh…';
-    try{
-      const dataUrl = await fileToDataURL(state.file);
-      progress.textContent = 'Mô hình đang xử lý…';
-      const data = await api('/upscale', { method:'POST', body:{ image: dataUrl, scale: 4, face_enhance: false } });
-      state.resultURL = data.outputUrl;
-      currentUser.credits = data.creditsRemaining;
-      renderHeader();
-      progress.textContent = `Hoàn tất — đã trừ ${data.creditsCharged} credit.`;
-      downloadBtn.disabled = false;
+    if (canvasBtn) canvasBtn.disabled = true;
+
+    let successCount = 0, failCount = 0;
+    for (let i = 0; i < images.length; i++) {
+      if (images[i].status !== 'waiting' && images[i].status !== 'error') continue;
+      images[i].status = 'processing';
       renderPreview();
-      loadTxHistory();
-    }catch(err){
-      progress.textContent = 'Lỗi: ' + err.message;
-    }finally{
-      processBtn.disabled = false;
+      progress.textContent = `Đang xử lý ảnh ${i+1}/${images.length}…`;
+      try {
+        const dataUrl = await fileToDataURL(images[i].file);
+        const data = await api('/upscale', { method: 'POST', body: { image: dataUrl, scale, face_enhance } });
+        images[i].resultURL = data.outputUrl;
+        images[i].status = 'done';
+        currentUser.credits = data.creditsRemaining;
+        renderHeader();
+        successCount++;
+      } catch(err) {
+        images[i].status = 'error';
+        images[i].errorMsg = err.message;
+        failCount++;
+      }
+      renderPreview();
     }
+
+    progress.textContent = `Hoàn tất ${successCount} ảnh${failCount ? `, lỗi ${failCount} ảnh` : ''}.`;
+    updateActionButtons();
+    loadTxHistory && loadTxHistory();
   });
 
-  downloadBtn.addEventListener('click', ()=>{
-    if(!state.resultURL) return;
-    const a = document.createElement('a');
-    a.href = state.resultURL; a.download = state.name.replace(/\.[^.]+$/,'')+'-ai.jpg';
-    a.click();
+  if (canvasBtn) {
+    canvasBtn.addEventListener('click', async () => {
+      if (!images.length) return;
+      const scale = getScale();
+      const face_enhance = getFaceEnhance();
+      const mode = isFreeMode() ? 'free' : 'paid';
+
+      // Validation
+      if (mode === 'free') {
+        const activeImages = images.filter((_, i) => i < FREE_MAX);
+        if (!activeImages.length) { progress.textContent = 'Chưa có ảnh hợp lệ.'; return; }
+      }
+      if (face_enhance) {
+        alert('Tối ưu khuôn mặt chỉ hỗ trợ trên AI Real-ESRGAN.'); return;
+      }
+      if (mode === 'paid') {
+        const processCount = images.filter(i => i.status === 'waiting' || i.status === 'error').length;
+        if (currentUser.credits < canvasQuota.creditCost * processCount) {
+          alert(`Không đủ credit. Cần ${canvasQuota.creditCost * processCount} credit cho ${processCount} ảnh.`); return;
+        }
+      }
+
+      // Only process images within limit
+      const maxIdx = mode === 'free' ? FREE_MAX : MAX_IMAGES;
+      const toProcess = images.slice(0, maxIdx).filter(i => i.status === 'waiting' || i.status === 'error');
+      if (!toProcess.length) { progress.textContent = 'Không có ảnh nào cần xử lý.'; return; }
+
+      processBtn.disabled = true;
+      canvasBtn.disabled = true;
+
+      let successCount = 0, failCount = 0;
+      for (let i = 0; i < Math.min(images.length, maxIdx); i++) {
+        if (images[i].status !== 'waiting' && images[i].status !== 'error') continue;
+        images[i].status = 'processing';
+        renderPreview();
+        progress.textContent = `GPU đang xử lý ảnh ${i+1}...…`;
+        try {
+          const resultDataUrl = await canvasUpscale(images[i].file, scale);
+          const data = await api('/wallet/canvas-done', { method: 'POST', body: { mode } });
+          images[i].resultURL = resultDataUrl;
+          images[i].status = 'done';
+          currentUser.credits = data.userCredits;
+          if (mode === 'free') canvasQuota.remainingFree = data.remainingFree;
+          renderHeader();
+          successCount++;
+        } catch(err) {
+          images[i].status = 'error';
+          images[i].errorMsg = err.message;
+          failCount++;
+        }
+        renderPreview();
+      }
+
+      progress.textContent = `GPU hoàn tất ${successCount} ảnh${failCount ? `, lỗi ${failCount} ảnh` : ''}.`;
+
+      const quotaLabel = document.getElementById('canvasQuotaLabel');
+      if (quotaLabel) {
+        quotaLabel.textContent = canvasQuota.remainingFree > 0
+          ? canvasQuota.remainingFree + '/' + canvasQuota.freePerDay + ' lượt miễn phí'
+          : 'Hết miễn phí';
+      }
+
+      updateActionButtons();
+      loadTxHistory && loadTxHistory();
+    });
+  }
+
+  downloadBtn.addEventListener('click', () => {
+    images.filter(i => i.status === 'done').forEach((img, idx) => {
+      setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = img.resultURL;
+        a.download = img.name.replace(/\.[^.]+$/, '') + '-upscaled.jpg';
+        a.click();
+      }, idx * 300);
+    });
   });
 }
 

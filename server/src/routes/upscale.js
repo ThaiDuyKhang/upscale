@@ -60,9 +60,10 @@ function extractOutputUrl(prediction) {
 upscaleRouter.post('/', async (req, res) => {
   const userId = req.user.sub;
   const user = stmt.findUserById.get(userId);
+  const isAdmin = user.role === 'admin';
   const cost = parseInt(getSetting('credits_per_upscale') || '5', 10);
 
-  if (user.credits < cost) {
+  if (!isAdmin && user.credits < cost) {
     return res.status(402).json({ error: `Không đủ credit. Cần ${cost} credit, bạn còn ${user.credits}.`, required: cost, balance: user.credits });
   }
   if (!process.env.REPLICATE_API_TOKEN || !process.env.REPLICATE_MODEL) {
@@ -83,14 +84,17 @@ upscaleRouter.post('/', async (req, res) => {
     if (!outputUrl) throw new Error('Mô hình không trả về ảnh kết quả.');
 
     // Chỉ trừ credit khi xử lý THÀNH CÔNG — nếu Replicate lỗi, người dùng không bị mất credit.
-    creditUser({ userId, delta: -cost, type: 'usage', status: 'completed', provider: 'replicate', note: 'Nâng cấp ảnh AI' });
+    // Admin không bị trừ credit.
+    if (!isAdmin) {
+      creditUser({ userId, delta: -cost, type: 'usage', status: 'completed', provider: 'replicate', note: 'Nâng cấp ảnh AI' });
+    }
     stmt.insertUsage.run({
-      user_id: userId, credits_charged: cost, scale: scale || 4,
+      user_id: userId, credits_charged: isAdmin ? 0 : cost, scale: scale || 4,
       face_enhance: face_enhance ? 1 : 0, status: 'succeeded', output_url: outputUrl, error: null,
     });
 
     const updatedUser = stmt.findUserById.get(userId);
-    res.json({ outputUrl, creditsCharged: cost, creditsRemaining: updatedUser.credits });
+    res.json({ outputUrl, creditsCharged: isAdmin ? 0 : cost, creditsRemaining: updatedUser.credits });
   } catch (err) {
     stmt.insertUsage.run({
       user_id: userId, credits_charged: 0, scale: scale || 4,

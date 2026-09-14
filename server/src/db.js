@@ -69,6 +69,15 @@ CREATE TABLE IF NOT EXISTS usage_logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS canvas_upscale_daily (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  used_date TEXT NOT NULL,                -- date('now') — ngày dùng (YYYY-MM-DD)
+  count INTEGER NOT NULL DEFAULT 1,       -- số lần đã dùng trong ngày đó
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id, used_date)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -82,6 +91,8 @@ const defaultSettings = {
   vnd_per_credit: process.env.VND_PER_CREDIT || '1000',
   credits_per_upscale: process.env.CREDITS_PER_UPSCALE || '5',
   min_deposit_vnd: process.env.MIN_DEPOSIT_VND || '10000',
+  canvas_free_per_day: '1',               // số lần dùng Canvas/GPU miễn phí mỗi ngày
+  credits_per_canvas_upscale: '1',        // credit tốn mỗi lần Canvas trả phí
 };
 const insertSettingIfMissing = db.prepare(
   `INSERT INTO settings (key, value) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = ?)`
@@ -159,6 +170,16 @@ export const stmt = {
   ),
   statsUpscalesToday: db.prepare(
     `SELECT COUNT(*) AS n FROM usage_logs WHERE status='succeeded' AND date(created_at) = date('now')`
+  ),
+
+  // Canvas free daily quota
+  getCanvasUsageToday: db.prepare(
+    `SELECT count FROM canvas_upscale_daily WHERE user_id = ? AND used_date = date('now')`
+  ),
+  upsertCanvasUsageToday: db.prepare(
+    `INSERT INTO canvas_upscale_daily (user_id, used_date, count)
+     VALUES (?, date('now'), 1)
+     ON CONFLICT(user_id, used_date) DO UPDATE SET count = count + 1`
   ),
 };
 
