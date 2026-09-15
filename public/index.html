@@ -66,6 +66,10 @@
       </div>
       <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300">
         <a href="/" onclick="event.preventDefault(); go('/');" class="hover:text-brand-600 dark:hover:text-brand-400">Trang chủ</a>
+        <a href="/tool" onclick="event.preventDefault(); go('/tool');" class="font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+          Công cụ AI/GPU
+        </a>
         <a href="/features" onclick="event.preventDefault(); go('/features');" class="hover:text-brand-600 dark:hover:text-brand-400">Tính năng</a>
         <a href="/pricing" onclick="event.preventDefault(); go('/pricing');" class="hover:text-brand-600 dark:hover:text-brand-400">Bảng giá</a>
         <a href="/contact" onclick="event.preventDefault(); go('/contact');" class="hover:text-brand-600 dark:hover:text-brand-400">Liên hệ</a>
@@ -204,6 +208,11 @@ async function render(){
   } else if (path === '/admin') {
     if(currentUser.role !== 'admin'){ go('/'); return; }
     renderAdminView(app);
+  } else if (path.startsWith('/admin/user/')) {
+    if(currentUser.role !== 'admin'){ go('/'); return; }
+    const uid = parseInt(path.split('/').pop(), 10);
+    renderAdminView(app);
+    setTimeout(() => openUserDetailModal(uid), 300);
   } else {
     app.innerHTML = '<div class="text-center py-20">Trang không tồn tại.</div>';
   }
@@ -216,12 +225,6 @@ function renderHeader(){
   el.innerHTML = '';
   el.appendChild(themeToggleBtn());
   if(currentUser){
-    const toolBtn = document.createElement('button');
-    toolBtn.className = 'text-sm font-bold px-4 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors mr-2';
-    toolBtn.textContent = 'Công Cụ AI/GPU';
-    toolBtn.onclick = () => go('/tool');
-    el.appendChild(toolBtn);
-
     const balance = document.createElement('span');
     balance.className = 'text-sm font-semibold px-3 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 cursor-pointer';
     balance.textContent = currentUser.credits + ' credit';
@@ -284,7 +287,7 @@ function renderHomeView(app) {
       <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight mb-6">Làm Nét Ảnh Bằng <span class="text-brand-500">AI</span></h1>
       <p class="text-lg text-slate-600 dark:text-slate-400 mb-10 max-w-2xl mx-auto">Sử dụng công nghệ Real-ESRGAN tiên tiến nhất để phục hồi chi tiết, tăng độ phân giải và làm rõ ảnh mờ chỉ trong vài giây.</p>
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <button onclick="go('/register')" class="px-8 py-3.5 rounded-xl font-bold text-white bg-brand-500 hover:bg-brand-600 shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-1">Thử Miễn Phí Ngay</button>
+        <button onclick="go('/tool')" class="px-8 py-3.5 rounded-xl font-bold text-white bg-brand-500 hover:bg-brand-600 shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-1">Thử Miễn Phí Ngay</button>
         <button onclick="go('/features')" class="px-8 py-3.5 rounded-xl font-bold border-2 border-slate-200 dark:border-slate-800 hover:border-brand-500 transition-all">Tìm Hiểu Thêm</button>
       </div>
     </section>
@@ -897,8 +900,8 @@ function canvasUpscale(file, scale = 2) {
 
 function setupUploadAndProcess(canvasQuota) {
   const images = [];
-  const MAX_IMAGES = 5;
-  const FREE_MAX = 1;
+  const MAX_IMAGES = currentUser.role === 'admin' ? 100 : 5;
+  const FREE_MAX = currentUser.role === 'admin' ? 100 : 1;
 
   const dz = document.getElementById('dz');
   const fileInput = document.getElementById('fileInput');
@@ -1147,7 +1150,7 @@ function setupUploadAndProcess(canvasQuota) {
       }
       if (mode === 'paid') {
         const processCount = images.filter(i => i.status === 'waiting' || i.status === 'error').length;
-        if (currentUser.credits < canvasQuota.creditCost * processCount) {
+        if (currentUser.role !== 'admin' && currentUser.credits < canvasQuota.creditCost * processCount) {
           alert(`Không đủ credit. Cần ${canvasQuota.creditCost * processCount} credit cho ${processCount} ảnh.`); return;
         }
       }
@@ -1320,22 +1323,30 @@ async function renderAdminView(app){
     `,
     users: () => `
       <div class="card p-5">
-        <h3 class="text-sm font-semibold mb-4">Người dùng</h3>
+        <h3 class="text-sm font-semibold mb-4">Người dùng (${users.total} tài khoản)</h3>
         <div class="overflow-x-auto">
           <table class="w-full text-xs">
             <thead><tr class="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-              <th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Vai trò</th><th class="py-2 pr-3">Credit</th><th class="py-2 pr-3">Ngày tạo</th><th class="py-2">Điều chỉnh</th>
+              <th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Vai trò</th><th class="py-2 pr-3">Credit</th><th class="py-2 pr-3">Ngày tạo</th><th class="py-2 pr-3">Chi tiết</th><th class="py-2">Điều chỉnh</th>
             </tr></thead>
             <tbody>
               ${users.items.map(u=>`
-                <tr class="border-b border-slate-100 dark:border-slate-800">
-                  <td class="py-2 pr-3">${u.email}</td>
-                  <td class="py-2 pr-3">${u.role}</td>
-                  <td class="py-2 pr-3 font-semibold">${u.credits}</td>
+                <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <td class="py-2 pr-3 font-medium">${u.email}</td>
+                  <td class="py-2 pr-3">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${u.role==='admin' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}">${u.role}</span>
+                  </td>
+                  <td class="py-2 pr-3 font-semibold text-brand-600 dark:text-brand-400">${u.credits}</td>
                   <td class="py-2 pr-3 text-slate-400">${new Date(u.created_at).toLocaleDateString('vi-VN')}</td>
-                  <td class="py-2 flex items-center">
+                  <td class="py-2 pr-3">
+                    <button class="user-detail-btn text-xs px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors flex items-center gap-1" data-id="${u.id}" data-email="${u.email}">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                      Chi tiết
+                    </button>
+                  </td>
+                  <td class="py-2 flex items-center gap-1">
                     <input type="number" placeholder="±credit" class="w-20 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-xs adjust-input" data-id="${u.id}">
-                    <button class="text-brand-600 dark:text-brand-400 font-medium ml-2 adjust-btn" data-id="${u.id}">Áp dụng</button>
+                    <button class="text-brand-600 dark:text-brand-400 font-medium adjust-btn" data-id="${u.id}">Áp dụng</button>
                   </td>
                 </tr>`).join('')}
             </tbody>
@@ -1411,11 +1422,135 @@ async function renderAdminView(app){
           }catch(err){ alert(err.message); }
         };
       });
+      document.querySelectorAll('.user-detail-btn').forEach(btn=>{
+        btn.onclick = ()=> openUserDetailModal(parseInt(btn.dataset.id, 10), btn.dataset.email);
+      });
     }
   }
 
   tabBtns.forEach(b => b.onclick = () => selectTab(b.dataset.tab));
   selectTab(currentAdminTab);
+}
+
+/* ============================================================ */
+/* ADMIN USER DETAIL MODAL                                       */
+/* ============================================================ */
+async function openUserDetailModal(userId, emailHint) {
+  // Remove old modal if any
+  const old = document.getElementById('userDetailModal');
+  if (old) old.remove();
+
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'userDetailModal';
+  overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
+  overlay.innerHTML = `
+    <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <h2 class="text-sm font-extrabold" id="udm-title">Chi tiết người dùng</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" id="udm-sub">Đang tải…</p>
+        </div>
+        <button id="udm-close" class="w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-700 hover:border-red-400 hover:text-red-500 transition-colors text-lg leading-none">&times;</button>
+      </div>
+      <div class="flex gap-1 px-6 pt-4 border-b border-slate-200 dark:border-slate-800">
+        <button class="udm-tab px-4 py-2 text-xs font-semibold rounded-t-lg border border-b-0 border-transparent transition-colors" data-tab="tx" id="udm-tab-tx">Giao dịch</button>
+        <button class="udm-tab px-4 py-2 text-xs font-semibold rounded-t-lg border border-b-0 border-transparent transition-colors" data-tab="usage" id="udm-tab-usage">Lượt nâng cấp AI</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6" id="udm-content">
+        <div class="text-xs text-slate-400 text-center py-10">Đang tải dữ liệu…</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('udm-close').onclick = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Fetch data in parallel
+  let userData, txData, usageData;
+  try {
+    [userData, txData, usageData] = await Promise.all([
+      api(`/admin/users/${userId}`),
+      api(`/admin/users/${userId}/transactions`),
+      api(`/admin/users/${userId}/usage`),
+    ]);
+  } catch(err) {
+    document.getElementById('udm-content').innerHTML = `<p class="text-xs text-red-500">${err.message}</p>`;
+    return;
+  }
+
+  document.getElementById('udm-title').textContent = userData.email;
+  document.getElementById('udm-sub').innerHTML =
+    `<span class="font-semibold text-brand-600 dark:text-brand-400">${userData.credits} credit</span> &nbsp;·&nbsp; vai trò: ${userData.role} &nbsp;·&nbsp; tham gia: ${new Date(userData.created_at).toLocaleDateString('vi-VN')}`;
+
+  function txHTML() {
+    if (!txData.items.length) return '<div class="text-xs text-slate-400 py-6 text-center">Chưa có giao dịch nào.</div>';
+    return `<table class="w-full text-xs">
+      <thead><tr class="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+        <th class="py-2 pr-3">Loại</th><th class="py-2 pr-3">Trạng thái</th><th class="py-2 pr-3">Số credit</th><th class="py-2 pr-3">Số tiền VNĐ</th><th class="py-2 pr-3">Ghi chú</th><th class="py-2">Thời gian</th>
+      </tr></thead>
+      <tbody>
+        ${txData.items.map(t => `
+          <tr class="border-b border-slate-100 dark:border-slate-800">
+            <td class="py-2 pr-3">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold
+                ${t.type==='deposit' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400'
+                  : t.type==='usage'||t.type==='canvas_usage' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400'
+                  : 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400'}">
+                ${t.type}
+              </span>
+            </td>
+            <td class="py-2 pr-3">
+              <span class="${t.status==='completed'?'text-emerald-500':t.status==='pending'?'text-amber-500':'text-red-500'}">${t.status}</span>
+            </td>
+            <td class="py-2 pr-3 font-semibold ${t.credits_delta>0?'text-emerald-600 dark:text-emerald-400':'text-slate-500'}">
+              ${t.credits_delta>0?'+':''}${t.credits_delta}
+            </td>
+            <td class="py-2 pr-3 text-slate-500">${t.amount_vnd ? t.amount_vnd.toLocaleString('vi-VN')+'đ' : '—'}</td>
+            <td class="py-2 pr-3 text-slate-400 max-w-[120px] truncate" title="${t.note||''}">  ${t.note || '—'}</td>
+            <td class="py-2 text-slate-400">${new Date(t.created_at).toLocaleString('vi-VN')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function usageHTML() {
+    if (!usageData.items.length) return '<div class="text-xs text-slate-400 py-6 text-center">Chưa có lượt nào.</div>';
+    return `<table class="w-full text-xs">
+      <thead><tr class="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+        <th class="py-2 pr-3">Trạng thái</th><th class="py-2 pr-3">Credit trừ</th><th class="py-2 pr-3">Scale</th><th class="py-2 pr-3">Face</th><th class="py-2 pr-3">Kết quả</th><th class="py-2">Thời gian</th>
+      </tr></thead>
+      <tbody>
+        ${usageData.items.map(u => `
+          <tr class="border-b border-slate-100 dark:border-slate-800">
+            <td class="py-2 pr-3">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${u.status==='succeeded'?'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400':'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'}">${u.status}</span>
+            </td>
+            <td class="py-2 pr-3 font-semibold">${u.credits_charged}</td>
+            <td class="py-2 pr-3">${u.scale ? u.scale+'x' : '—'}</td>
+            <td class="py-2 pr-3">${u.face_enhance ? '✓' : '—'}</td>
+            <td class="py-2 pr-3">${u.output_url ? `<a href="${u.output_url}" target="_blank" class="text-brand-600 dark:text-brand-400 underline">Xem ảnh</a>` : (u.error ? `<span class="text-red-400 max-w-[100px] block truncate" title="${u.error}">Lỗi</span>` : '—')}</td>
+            <td class="py-2 text-slate-400">${new Date(u.created_at).toLocaleString('vi-VN')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  let activeTab = 'tx';
+  function renderTab(tab) {
+    activeTab = tab;
+    document.getElementById('udm-content').innerHTML = tab === 'tx' ? txHTML() : usageHTML();
+    document.querySelectorAll('.udm-tab').forEach(b => {
+      if (b.dataset.tab === tab) {
+        b.className = 'udm-tab px-4 py-2 text-xs font-semibold rounded-t-lg border border-b-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 transition-colors';
+      } else {
+        b.className = 'udm-tab px-4 py-2 text-xs font-semibold rounded-t-lg border border-b-0 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors';
+      }
+    });
+  }
+  document.querySelectorAll('.udm-tab').forEach(b => b.onclick = () => renderTab(b.dataset.tab));
+  renderTab('tx');
 }
 
 /* ============================================================ */

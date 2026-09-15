@@ -13,6 +13,33 @@ adminRouter.get('/users', (req, res) => {
   res.json({ items: users, page, pageSize, total });
 });
 
+adminRouter.get('/users/:id', (req, res) => {
+  const user = stmt.findUserById.get(parseInt(req.params.id, 10));
+  if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+  const { password_hash, ...safe } = user;
+  res.json(safe);
+});
+
+adminRouter.get('/users/:id/transactions', (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  const user = stmt.findUserById.get(userId);
+  if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const pageSize = 50;
+  const rows = stmt.listTxForUser.all(userId, pageSize, (page - 1) * pageSize);
+  res.json({ items: rows, page, pageSize });
+});
+
+adminRouter.get('/users/:id/usage', (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  const user = stmt.findUserById.get(userId);
+  if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const pageSize = 50;
+  const rows = stmt.listUsageForUser.all(userId, pageSize, (page - 1) * pageSize);
+  res.json({ items: rows, page, pageSize });
+});
+
 adminRouter.post('/users/:id/adjust', (req, res) => {
   const userId = parseInt(req.params.id, 10);
   const delta = parseInt(req.body?.delta, 10);
