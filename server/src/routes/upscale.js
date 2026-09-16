@@ -5,6 +5,27 @@ import { requireAuth } from '../auth.js';
 export const upscaleRouter = Router();
 upscaleRouter.use(requireAuth);
 
+// Proxy image route to hide replicate.delivery URL
+upscaleRouter.get('/proxy-image', async (req, res) => {
+  const b64Url = req.query.u;
+  if (!b64Url) return res.status(400).json({ error: 'Thiếu tham số u.' });
+  try {
+    const url = Buffer.from(b64Url, 'base64').toString('utf-8');
+    if (!url.startsWith('http')) return res.status(400).json({ error: 'URL không hợp lệ.' });
+    
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Không thể tải ảnh từ máy chủ gốc.');
+    
+    res.set('Content-Type', response.headers.get('content-type') || 'image/png');
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    
+    const arrayBuffer = await response.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi khi proxy ảnh.' });
+  }
+});
+
 const REPLICATE_BASE = 'https://api.replicate.com/v1';
 
 // ─── GFPGAN config ───────────────────────────────────────────────────────────
@@ -154,8 +175,9 @@ upscaleRouter.post('/', async (req, res) => {
     });
 
     const updatedUser = stmt.findUserById.get(userId);
+    const proxyUrl = `/api/upscale/proxy-image?u=${Buffer.from(outputUrl).toString('base64')}`;
     res.json({
-      outputUrl,
+      outputUrl: proxyUrl,
       creditsCharged: isAdmin ? 0 : cost,
       creditsRemaining: updatedUser.credits,
       modelUsed,
@@ -259,8 +281,9 @@ upscaleRouter.post('/gfpgan', async (req, res) => {
     });
 
     const updatedUser = stmt.findUserById.get(userId);
+    const proxyUrl = `/api/upscale/proxy-image?u=${Buffer.from(outputUrl).toString('base64')}`;
     res.json({
-      outputUrl,
+      outputUrl: proxyUrl,
       creditsCharged: isAdmin ? 0 : cost,
       creditsRemaining: updatedUser.credits,
       modelUsed: modelId,
