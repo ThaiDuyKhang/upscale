@@ -12,6 +12,8 @@ server/scripts/backup/.env
 service-account*.json
 *.pem
 *.key
+implementation_plan 2.md
+implementation_plan 2.md
 
 # Ngoại trừ các file cấu hình mẫu
 !.env.example

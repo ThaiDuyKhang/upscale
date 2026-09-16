@@ -54,6 +54,8 @@
   ::selection{ background:#06b6d4; color:#fff; }
   .card{ @apply rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900; }
 </style>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body class="min-h-screen flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans transition-colors">
 
@@ -194,8 +196,8 @@ async function render(){
     else if (path === '/contact') renderContactView(app);
   } else if (AUTH_ROUTES.includes(path)) {
     if (currentUser) { go('/dashboard'); return; }
-    if (path === '/login') renderAuthView(app, 'login');
-    if (path === '/register') renderAuthView(app, 'register');
+    if (path === '/login') await renderAuthView(app, 'login');
+    if (path === '/register') await renderAuthView(app, 'register');
   } else if (!currentUser) {
     go('/login'); 
     return;
@@ -484,29 +486,37 @@ function renderProfileView(app) {
     <div class="max-w-md mx-auto py-8">
       <h1 class="text-2xl font-extrabold mb-6">Thông tin cá nhân</h1>
       
-      <div class="card p-6 mb-6 space-y-4">
-        <div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">Email</div>
-          <div class="font-medium">${currentUser.email}</div>
-        </div>
-        <div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">Vai trò</div>
-          <div class="font-medium uppercase text-xs inline-block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 mt-1">${currentUser.role}</div>
-        </div>
-        <div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">Ngày đăng ký</div>
-          <div class="font-medium">${new Date(currentUser.created_at).toLocaleDateString('vi-VN')}</div>
-        </div>
-        <div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">Số dư Credit</div>
-          <div class="font-bold text-brand-600 dark:text-brand-400">${currentUser.credits} credit</div>
+      <div class="card p-6 mb-6 flex flex-col sm:flex-row gap-6 items-center sm:items-start text-center sm:text-left">
+        ${currentUser.avatar_url 
+          ? `<img src="${currentUser.avatar_url}" class="w-20 h-20 rounded-full bg-slate-100 object-cover">` 
+          : `<div class="w-20 h-20 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-3xl font-bold text-brand-600 dark:text-brand-400">${currentUser.email[0].toUpperCase()}</div>`}
+        <div class="flex-1 space-y-3">
+          <div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">Email</div>
+            <div class="font-medium">${currentUser.email}</div>
+          </div>
+          <div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">Vai trò</div>
+            <div class="font-medium uppercase text-xs inline-block px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 mt-1">${currentUser.role}</div>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center sm:justify-start">
+            <div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Ngày đăng ký</div>
+              <div class="font-medium">${new Date(currentUser.created_at).toLocaleDateString('vi-VN')}</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">Số dư Credit</div>
+              <div class="font-bold text-brand-600 dark:text-brand-400">${currentUser.credits} credit</div>
+            </div>
+          </div>
         </div>
       </div>
 
       <div class="card p-6">
-        <h3 class="font-bold mb-4">Đổi mật khẩu</h3>
+        <h3 class="font-bold mb-1">Đổi / Cập nhật mật khẩu</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Nếu bạn đăng nhập bằng Google và chưa có mật khẩu, hãy để trống "Mật khẩu hiện tại".</p>
         <form id="changePasswordForm" class="space-y-3">
-          <input required type="password" name="currentPassword" placeholder="Mật khẩu hiện tại" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
+          <input type="password" name="currentPassword" placeholder="Mật khẩu hiện tại (để trống nếu đăng nhập Google)" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
           <input required type="password" name="newPassword" placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
           <div id="cpwMsg" class="text-xs hidden"></div>
           <button class="w-full py-2.5 rounded-lg text-sm font-semibold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:opacity-90 transition-opacity">Lưu Mật Khẩu</button>
@@ -538,16 +548,49 @@ function renderProfileView(app) {
 /* ============================================================ */
 /* AUTH VIEW                                                     */
 /* ============================================================ */
-function renderAuthView(app, mode){
+async function renderAuthView(app, mode){
   updateSEO({
     title: mode==='login' ? 'Đăng nhập — Xưởng Nét' : 'Đăng ký — Xưởng Nét',
     description: 'Đăng nhập hoặc đăng ký tài khoản Xưởng Nét.',
     noindex: true
   });
+  
+  let googleClientId = '';
+  try {
+    const config = await api('/auth/config');
+    googleClientId = config.googleClientId;
+  } catch(e) {}
+
   app.innerHTML = `
     <div class="max-w-sm mx-auto mt-10 card p-6">
       <h1 class="text-xl font-extrabold mb-1">${mode==='login' ? 'Đăng nhập' : 'Tạo tài khoản'}</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mb-5">${mode==='login' ? 'Vào Xưởng Nét để nâng cấp ảnh bằng AI.' : 'Đăng ký để nhận credit dùng thử và nạp thêm khi cần.'}</p>
+      
+      ${googleClientId ? `
+        <div id="g_id_onload"
+             data-client_id="${googleClientId}"
+             data-context="signin"
+             data-ux_mode="popup"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-shape="rectangular"
+             data-theme="outline"
+             data-text="continue_with"
+             data-size="large"
+             data-logo_alignment="left"
+             style="width: 100%; display: flex; justify-content: center;">
+        </div>
+        
+        <div class="flex items-center gap-3 my-5">
+          <div class="h-px bg-slate-200 dark:bg-slate-700 flex-grow"></div>
+          <span class="text-xs text-slate-400 font-medium">hoặc dùng email</span>
+          <div class="h-px bg-slate-200 dark:bg-slate-700 flex-grow"></div>
+        </div>
+      ` : ''}
+
       <form id="authForm" class="space-y-3">
         <input required type="email" name="email" placeholder="Email" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
         <input required type="password" name="password" placeholder="Mật khẩu (tối thiểu 6 ký tự)" class="w-full text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5">
@@ -560,6 +603,17 @@ function renderAuthView(app, mode){
           : `Đã có tài khoản? <a href="/login" data-link class="text-brand-600 dark:text-brand-400 font-medium">Đăng nhập</a>`}
       </div>
     </div>`;
+
+  window.handleCredentialResponse = async (response) => {
+    try {
+      currentUser = await api('/auth/google', { method: 'POST', body: { credential: response.credential } });
+      go('/');
+    } catch (err) {
+      const errBox = document.getElementById('authError');
+      errBox.textContent = err.message || 'Lỗi đăng nhập Google';
+      errBox.classList.remove('hidden');
+    }
+  };
 
   app.querySelectorAll('[data-link]').forEach(a=> a.onclick = e=>{ e.preventDefault(); go(a.getAttribute('href')); });
 
@@ -577,6 +631,17 @@ function renderAuthView(app, mode){
       errBox.classList.remove('hidden');
     }
   });
+  
+  if (googleClientId && window.google) {
+    google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: window.handleCredentialResponse
+    });
+    google.accounts.id.renderButton(
+      document.querySelector(".g_id_signin"),
+      { theme: "outline", size: "large", width: 334 }
+    );
+  }
 }
 
 /* ============================================================ */
@@ -667,76 +732,166 @@ async function renderToolView(app) {
         <!-- Cột trái: Bảng điều khiển -->
         <div class="w-full md:w-64 flex-none space-y-4">
 
-          <div class="card p-5">
-            <h2 class="text-base font-bold mb-4">Cài đặt</h2>
-
-            <!-- Scale Slider -->
-            <div class="mb-5">
-              <div class="flex justify-between items-center mb-2">
-                <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Tỷ lệ phóng to</label>
-                <span id="scaleValue" class="text-lg font-extrabold text-brand-600 dark:text-brand-400">4x</span>
-              </div>
-              <input type="range" id="scaleSlider" min="2" max="6" step="2" value="4"
-                class="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand-500 bg-slate-200 dark:bg-slate-700">
-              <div class="flex justify-between text-[10px] text-slate-400 mt-1.5">
-                <span>2x</span><span class="text-brand-500 font-bold">4x</span><span>6x</span>
+          <!-- ══════════ MODEL SELECTOR ══════════ -->
+          <div class="card overflow-hidden">
+            <!-- Radio Model Selector -->
+            <div class="p-3 border-b border-slate-200 dark:border-slate-800">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Chọn mô hình AI</div>
+              <div class="space-y-1.5">
+                <label class="flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-brand-500 bg-brand-50 dark:bg-brand-900/20 transition-colors" id="radioLabelEsrgan">
+                  <input type="radio" name="modelSelector" value="realesrgan" checked class="accent-brand-500 w-3.5 h-3.5 flex-shrink-0">
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-brand-700 dark:text-brand-300 flex items-center gap-1.5">✨ Real-ESRGAN <span class="text-[9px] bg-brand-100 dark:bg-brand-900 px-1.5 py-0.5 rounded-full font-normal">AI · 5 ảnh</span></div>
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Phóng to đa dụng — ảnh thực, anime, phong cảnh</div>
+                  </div>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-400 transition-colors" id="radioLabelGfpgan">
+                  <input type="radio" name="modelSelector" value="gfpgan" class="accent-violet-600 w-3.5 h-3.5 flex-shrink-0">
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">👤 GFPGAN <span class="text-[9px] bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400 px-1.5 py-0.5 rounded-full font-normal">AI · 5 ảnh</span></div>
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Phục hồi khuôn mặt mờ, ảnh cũ, ảnh AI hỏng</div>
+                  </div>
+                </label>
+                <div class="border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-0.5">
+                  <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1.5">⚡ Canvas GPU — Nhanh, Offline</div>
+                  <div class="space-y-1.5">
+                    <label class="flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-colors" id="radioLabelGpuPaid">
+                      <input type="radio" name="modelSelector" value="canvas-paid" class="accent-emerald-500 w-3.5 h-3.5 flex-shrink-0">
+                      <div class="min-w-0">
+                        <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">⚡ GPU Trả phí <span class="text-[9px] bg-emerald-100 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded-full font-normal">5 ảnh · Credit</span></div>
+                        <div class="text-[10px] text-slate-500 dark:text-slate-400">Chạy trong trình duyệt, không cần server</div>
+                      </div>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-colors ${hasFreeLeft ? '' : 'opacity-40 pointer-events-none'}" id="radioLabelGpuFree">
+                      <input type="radio" name="modelSelector" value="canvas-free" class="accent-amber-500 w-3.5 h-3.5 flex-shrink-0" ${hasFreeLeft ? '' : 'disabled'}>
+                      <div class="min-w-0">
+                        <div class="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">⚡ GPU Miễn phí <span id="canvasQuotaLabel" class="text-[9px] ${hasFreeLeft ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'} px-1.5 py-0.5 rounded-full font-normal">${hasFreeLeft ? canvasQuota.remainingFree + '/' + canvasQuota.freePerDay + ' lượt' : 'Hết lượt'}</span></div>
+                        <div class="text-[10px] text-slate-500 dark:text-slate-400">1 ảnh · Tối đa 2x · Không tốn credit</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <!-- Face Enhance -->
-            <label class="flex items-center gap-3 cursor-pointer p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-              <input type="checkbox" id="faceEnhanceCheck" class="w-4 h-4 rounded border-slate-300 text-brand-500 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800">
-              <div>
-                <div class="text-sm font-medium">Tối ưu khuôn mặt</div>
-                <div class="text-[11px] text-slate-500 dark:text-slate-400">Face Enhance — Chỉ AI</div>
+            <!-- ─── Real-ESRGAN Settings Panel ─── -->
+            <div id="panelRealEsrgan" class="p-4 space-y-4">
+              <!-- Model description -->
+              <div class="p-3 rounded-lg bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-900">
+                <div class="text-[10px] font-bold text-brand-600 dark:text-brand-400 mb-1">REAL-ESRGAN</div>
+                <div class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">Phóng to ảnh đa dụng — ảnh thực, anime, phong cảnh, đồ vật. Duy trì chi tiết tốt ở scale cao.</div>
               </div>
-            </label>
+
+              <!-- Scale Slider -->
+              <div>
+                <div class="flex justify-between items-center mb-1.5">
+                  <label class="text-xs font-semibold text-slate-600 dark:text-slate-400">Tỷ lệ phóng to</label>
+                  <span id="scaleValue" class="text-lg font-extrabold text-brand-600 dark:text-brand-400">4x</span>
+                </div>
+                <input type="range" id="scaleSlider" min="0.5" max="10" step="0.5" value="4"
+                  class="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand-500 bg-slate-200 dark:bg-slate-700">
+                <div class="flex justify-between text-[9px] text-slate-400 mt-1">
+                  <span>0.5x</span><span>2x</span><span class="text-brand-500 font-bold">4x</span><span>6x</span><span>8x</span><span>10x</span>
+                </div>
+                <div id="scalePresets" class="flex gap-1 mt-2 flex-wrap">
+                  <button data-scale="2" class="scale-preset px-2 py-1 rounded text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">2x</button>
+                  <button data-scale="4" class="scale-preset px-2 py-1 rounded text-[10px] font-bold border border-brand-500 text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20">4x</button>
+                  <button data-scale="6" class="scale-preset px-2 py-1 rounded text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">6x</button>
+                  <button data-scale="8" class="scale-preset px-2 py-1 rounded text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">8x</button>
+                  <button data-scale="10" class="scale-preset px-2 py-1 rounded text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">10x</button>
+                </div>
+              </div>
+
+              <div class="border-t border-slate-100 dark:border-slate-800"></div>
+
+              <!-- Face Enhance toggle -->
+              <label class="flex items-start gap-3 cursor-pointer p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50/30 dark:hover:bg-brand-900/10 transition-colors" id="faceEnhanceLabel">
+                <div class="mt-0.5 w-9 h-5 relative flex-shrink-0">
+                  <input type="checkbox" id="faceEnhanceCheck" class="sr-only peer">
+                  <div class="w-9 h-5 bg-slate-200 dark:bg-slate-700 rounded-full peer-checked:bg-brand-500 transition-colors"></div>
+                  <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"></div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold">Tối ưu khuôn mặt</div>
+                  <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">GFPGAN phụ trợ — phục hồi chi tiết mặt sau upscale</div>
+                </div>
+              </label>
+            </div>
+
+            <!-- ─── GFPGAN Settings Panel ─── -->
+            <div id="panelGfpgan" class="p-4 space-y-4 hidden">
+              <!-- Model description -->
+              <div class="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-900">
+                <div class="text-[10px] font-bold text-violet-600 dark:text-violet-400 mb-1">GFPGAN · 116M lượt chạy</div>
+                <div class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">Chuyên phục hồi khuôn mặt trong ảnh cũ bị mờ, ảnh AI tạo bị dị dạng. Thuật toán sinh đối kháng (GAN) kết hợp face prior.</div>
+              </div>
+
+              <!-- GFPGAN Scale slider: 1–4 -->
+              <div>
+                <div class="flex justify-between items-center mb-1.5">
+                  <label class="text-xs font-semibold text-slate-600 dark:text-slate-400">Tỷ lệ phóng to</label>
+                  <span id="gfpScaleValue" class="text-lg font-extrabold text-violet-600 dark:text-violet-400">2x</span>
+                </div>
+                <input type="range" id="gfpScaleSlider" min="1" max="4" step="1" value="2"
+                  class="w-full h-2 rounded-full appearance-none cursor-pointer accent-violet-500 bg-slate-200 dark:bg-slate-700">
+                <div class="flex justify-between text-[9px] text-slate-400 mt-1 px-0.5">
+                  <span>1x</span><span class="text-violet-500 font-bold">2x</span><span>3x</span><span>4x</span>
+                </div>
+              </div>
+
+              <div class="border-t border-slate-100 dark:border-slate-800"></div>
+
+              <!-- GFPGAN Version selector -->
+              <div>
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-2">Phiên bản thuật toán</label>
+                <div class="space-y-1.5">
+                  <label class="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg border border-violet-400 bg-violet-50 dark:bg-violet-900/20 dark:border-violet-800" id="gfpv14Label">
+                    <input type="radio" name="gfpVersion" value="v1.4" checked class="mt-0.5 accent-violet-500">
+                    <div>
+                      <div class="text-xs font-bold text-violet-700 dark:text-violet-300">v1.4 <span class="text-[9px] font-normal bg-violet-500 text-white px-1 py-0.5 rounded ml-1">Khuyên dùng</span></div>
+                      <div class="text-[10px] text-slate-500 mt-0.5">Chi tiết cao nhất & giữ danh tính khuôn mặt tốt nhất.</div>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-violet-300 transition-colors">
+                    <input type="radio" name="gfpVersion" value="v1.3" class="mt-0.5 accent-violet-500">
+                    <div>
+                      <div class="text-xs font-bold">v1.3</div>
+                      <div class="text-[10px] text-slate-500 mt-0.5">Chất lượng phục chế mạnh hơn v1.2, ổn định.</div>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-violet-300 transition-colors">
+                    <input type="radio" name="gfpVersion" value="RestoreFormer" class="mt-0.5 accent-violet-500">
+                    <div>
+                      <div class="text-xs font-bold">RestoreFormer</div>
+                      <div class="text-[10px] text-slate-500 mt-0.5">Kiến trúc Transformer — phục hồi sâu cho ảnh rất cũ hoặc hỏng nặng.</div>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-violet-300 transition-colors">
+                    <input type="radio" name="gfpVersion" value="v1.2" class="mt-0.5 accent-violet-500">
+                    <div>
+                      <div class="text-xs font-bold text-slate-500">v1.2 (Cũ)</div>
+                      <div class="text-[10px] text-slate-400 mt-0.5">Phiên bản đầu tiên, xử lý nhanh hơn nhưng ít chi tiết.</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="card p-5 space-y-2">
-            <!-- GPU section header -->
-            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-              <span class="flex items-center gap-1">⚡ Canvas GPU</span>
-              <span id="canvasQuotaLabel" class="font-semibold ${hasFreeLeft ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}">${ hasFreeLeft ? canvasQuota.remainingFree + '/' + canvasQuota.freePerDay + ' lượt miễn phí' : 'Hết miễn phí'}</span>
-            </div>
-
-            <!-- Free GPU checkbox -->
-            <label class="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-colors ${hasFreeLeft ? '' : 'opacity-40 pointer-events-none'}" id="freeGpuLabel">
-              <input type="checkbox" id="freeGpuCheck" class="w-4 h-4 mt-0.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400 dark:border-slate-600" ${hasFreeLeft ? '' : 'disabled'}>
-              <div>
-                <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Sử dụng lượt miễn phí</div>
-                <div class="text-[10px] text-slate-500 dark:text-slate-400">1 ảnh • 2x • Không Face Enhance</div>
-              </div>
-            </label>
-
-            <button id="canvasBtn" disabled
-              class="w-full py-2.5 rounded-lg text-sm font-semibold border border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 disabled:opacity-40 disabled:cursor-not-allowed hover:border-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
-              ⚡ GPU (trả phí)
-            </button>
+          <!-- ── Run Button Card ── -->
+          <div class="card p-4 space-y-2">
             <button id="processBtn" disabled
-              class="w-full py-2.5 rounded-lg text-sm font-semibold bg-brand-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600 transition-colors">
-              ✨ AI Real-ESRGAN
-            </button>
-            <button id="downloadBtn" disabled
-              class="w-full py-2.5 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:border-brand-400 hover:text-brand-600 transition-colors">
-              ↓ Tải ảnh về
+              class="w-full py-3 rounded-xl text-sm font-bold bg-brand-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600 active:scale-95 transition-all">
+              <span id="processBtnLabel">✨ Chạy Real-ESRGAN</span>
             </button>
             <p id="progress" class="text-[11px] text-slate-500 dark:text-slate-400 text-center min-h-[1.2em]"></p>
           </div>
 
-          <div class="text-[11px] text-slate-400 dark:text-slate-600 space-y-1 px-1">
-            <div class="flex items-center gap-1.5">
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold">✨ AI</span>
-              Tối đa 5 ảnh/lần
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-bold">⚡ GPU trả phí</span>
-              Tối đa 5 ảnh/lần
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold">⚡ GPU miễn phí</span>
-              1 ảnh, tối đa 2x
-            </div>
+          <!-- ── Hint legend ── -->
+          <div class="text-[10px] text-slate-400 dark:text-slate-600 space-y-0.5 px-1">
+            <div>✨ AI Real-ESRGAN / GFPGAN — tối đa 5 ảnh/lần</div>
+            <div>⚡ GPU Trả phí — tối đa 5 ảnh/lần, tốn credit</div>
+            <div>⚡ GPU Miễn phí — 1 ảnh, tối đa 2x, không tốn credit</div>
           </div>
         </div>
 
@@ -759,12 +914,108 @@ async function renderToolView(app) {
     </div>
   `;
 
-  // Slider label update
+  // ─── Tool switcher ───────────────────────────────────────────────────────────
+  window.activeTool = 'realesrgan'; // 'realesrgan' | 'gfpgan' | 'canvas-paid' | 'canvas-free'
+
+  const _RADIO_ACTIVE = {
+    'realesrgan':  'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-brand-500 bg-brand-50 dark:bg-brand-900/20 transition-colors',
+    'gfpgan':      'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-violet-500 bg-violet-50 dark:bg-violet-900/20 transition-colors',
+    'canvas-paid': 'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 transition-colors',
+    'canvas-free': 'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-amber-500 bg-amber-50 dark:bg-amber-900/20 transition-colors',
+  };
+  const _RADIO_INACTIVE = {
+    'realesrgan':  'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-brand-400 transition-colors',
+    'gfpgan':      'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-400 transition-colors',
+    'canvas-paid': 'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-colors',
+    'canvas-free': 'flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-colors',
+  };
+  const _BTN_CLASS = {
+    'realesrgan':  'w-full py-3 rounded-xl text-sm font-bold bg-brand-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-600 active:scale-95 transition-all',
+    'gfpgan':      'w-full py-3 rounded-xl text-sm font-bold bg-violet-600 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-violet-700 active:scale-95 transition-all',
+    'canvas-paid': 'w-full py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-600 active:scale-95 transition-all',
+    'canvas-free': 'w-full py-3 rounded-xl text-sm font-bold bg-amber-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-600 active:scale-95 transition-all',
+  };
+  const _BTN_LABEL = {
+    'realesrgan':  '✨ Chạy Real-ESRGAN',
+    'gfpgan':      '👤 Chạy GFPGAN',
+    'canvas-paid': '⚡ Chạy GPU (Trả phí)',
+    'canvas-free': '⚡ Chạy GPU (Miễn phí)',
+  };
+  const _RADIO_EL_IDS = {
+    'realesrgan':  'radioLabelEsrgan',
+    'gfpgan':      'radioLabelGfpgan',
+    'canvas-paid': 'radioLabelGpuPaid',
+    'canvas-free': 'radioLabelGpuFree',
+  };
+
+  window.__switchTool = function(tool) {
+    window.activeTool = tool;
+    // Update all radio label styles
+    Object.entries(_RADIO_EL_IDS).forEach(([t, id]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.className = (t === tool) ? _RADIO_ACTIVE[t] : _RADIO_INACTIVE[t];
+      // Keep free-gpu disabled styling if out of quota
+      if (t === 'canvas-free' && el.classList.contains('opacity-40')) {
+        el.className += ' opacity-40 pointer-events-none';
+      }
+    });
+    // Show correct settings panel
+    const panelE = document.getElementById('panelRealEsrgan');
+    const panelG = document.getElementById('panelGfpgan');
+    if (panelE) panelE.classList.toggle('hidden', tool !== 'realesrgan');
+    if (panelG) panelG.classList.toggle('hidden', tool !== 'gfpgan');
+    // Update run button style + label
+    const btn = document.getElementById('processBtn');
+    const lbl = document.getElementById('processBtnLabel');
+    if (btn) btn.className = _BTN_CLASS[tool] || _BTN_CLASS['realesrgan'];
+    if (lbl) lbl.textContent = _BTN_LABEL[tool] || _BTN_LABEL['realesrgan'];
+    // Update dropzone hint
+    const dzSub = document.getElementById('dzSubtext');
+    if (dzSub) dzSub.textContent = tool === 'canvas-free'
+      ? 'GPU Miễn phí: chỉ 1 ảnh, tối đa 2x'
+      : 'JPG, PNG, WebP — Tối đa 5 ảnh, mỗi ảnh dưới 5MB';
+  };
+
+  // Wire radio inputs to __switchTool
+  document.querySelectorAll('input[name="modelSelector"]').forEach(radio => {
+    radio.addEventListener('change', () => window.__switchTool(radio.value));
+  });
+
+  // ─── Real-ESRGAN Scale slider + preset buttons ────────────────────────────────
   const slider = document.getElementById('scaleSlider');
   const scaleValue = document.getElementById('scaleValue');
-  slider.addEventListener('input', () => {
-    scaleValue.textContent = slider.value + 'x';
+  function updateScalePresets(val) {
+    document.querySelectorAll('.scale-preset').forEach(btn => {
+      const active = parseFloat(btn.dataset.scale) === parseFloat(val);
+      btn.className = active
+        ? 'scale-preset px-2 py-1 rounded text-[10px] font-bold border border-brand-500 text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20'
+        : 'scale-preset px-2 py-1 rounded text-[10px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors';
+    });
+  }
+  if (slider) {
+    slider.addEventListener('input', () => {
+      scaleValue.textContent = slider.value + 'x';
+      updateScalePresets(slider.value);
+    });
+  }
+  document.querySelectorAll('.scale-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      slider.value = btn.dataset.scale;
+      scaleValue.textContent = btn.dataset.scale + 'x';
+      updateScalePresets(btn.dataset.scale);
+    });
   });
+
+  // ─── GFPGAN Scale slider ─────────────────────────────────────────────────────
+  const gfpSlider = document.getElementById('gfpScaleSlider');
+  const gfpScaleValue = document.getElementById('gfpScaleValue');
+  if (gfpSlider) {
+    gfpSlider.addEventListener('input', () => {
+      gfpScaleValue.textContent = gfpSlider.value + 'x';
+    });
+  }
+
 
   setupUploadAndProcess(canvasQuota);
 }
@@ -775,20 +1026,22 @@ async function loadTxHistory(){
   try{
     const data = await api('/wallet/transactions');
     const items = data.items.filter(t => t.status !== 'pending');
-    if(!items.length){ box.innerHTML = '<div class="text-slate-400">Chưa có giao dịch nào.</div>'; return; }
-    box.innerHTML = items.map(t=>{
-      const sign = t.credits_delta > 0 ? '+' : '';
-      const color = t.credits_delta > 0 ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400';
-      const label = t.type==='deposit' ? 'Nạp tiền' 
-                  : t.type==='usage' ? 'Nâng cấp AI' 
-                  : t.type==='canvas_usage' ? '⚡ Canvas GPU'
-                  : 'Admin điều chỉnh';
-      return `<div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
-        <span>${label}</span>
-        <span class="${color} font-semibold">${sign}${t.credits_delta}</span>
-      </div>`;
-    }).join('');
-  }catch{ box.innerHTML = '<div class="text-red-400">Không tải được lịch sử.</div>'; }
+    if(!items.length){ if(box) box.innerHTML = '<div class="text-slate-400">Chưa có giao dịch nào.</div>'; return; }
+    if(box) {
+      box.innerHTML = items.map(t=>{
+        const sign = t.credits_delta > 0 ? '+' : '';
+        const color = t.credits_delta > 0 ? 'text-emerald-500' : 'text-slate-500 dark:text-slate-400';
+        const label = t.type==='deposit' ? 'Nạp tiền' 
+                    : t.type==='usage' ? 'Nâng cấp AI' 
+                    : t.type==='canvas_usage' ? '⚡ Canvas GPU'
+                    : 'Admin điều chỉnh';
+        return `<div class="flex justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+          <span>${label}</span>
+          <span class="${color} font-semibold">${sign}${t.credits_delta}</span>
+        </div>`;
+      }).join('');
+    }
+  }catch{ if(box) box.innerHTML = '<div class="text-red-400">Không tải được lịch sử.</div>'; }
 }
 
 // ─── Canvas/GPU Upscale Engine ────────────────────────────────────────────────
@@ -900,62 +1153,35 @@ function canvasUpscale(file, scale = 2) {
 
 function setupUploadAndProcess(canvasQuota) {
   const images = [];
-  const MAX_IMAGES = currentUser.role === 'admin' ? 100 : 5;
-  const FREE_MAX = currentUser.role === 'admin' ? 100 : 1;
+  const MAX_IMAGES = currentUser?.role === 'admin' ? 100 : 5;
+  const FREE_MAX = currentUser?.role === 'admin' ? 100 : 1;
 
   const dz = document.getElementById('dz');
   const fileInput = document.getElementById('fileInput');
   const previewBody = document.getElementById('previewBody');
   const progress = document.getElementById('progress');
   const processBtn = document.getElementById('processBtn');
-  const canvasBtn = document.getElementById('canvasBtn');
-  const downloadBtn = document.getElementById('downloadBtn');
+  const canvasBtn = null;   // merged into processBtn via activeTool
+  const downloadBtn = null; // replaced by ZIP bar in renderPreview
   const slider = document.getElementById('scaleSlider');
   const scaleValue = document.getElementById('scaleValue');
   const faceEnhanceCheck = document.getElementById('faceEnhanceCheck');
-  const freeGpuCheck = document.getElementById('freeGpuCheck');
+  const freeGpuCheck = null; // replaced by radio selector
   const dzSubtext = document.getElementById('dzSubtext');
 
-  function isFreeMode() { return freeGpuCheck && freeGpuCheck.checked; }
-  function getScale() { return parseInt(slider.value, 10); }
+  function isFreeMode() { return window.activeTool === 'canvas-free'; }
+  function getScale() {
+    if (window.activeTool === 'gfpgan') {
+      const s = document.getElementById('gfpScaleSlider');
+      return s ? parseFloat(s.value) : 2;
+    }
+    if (window.activeTool === 'canvas-free') return 2;
+    return slider ? parseFloat(slider.value) : 4;
+  }
   function getFaceEnhance() { return faceEnhanceCheck && faceEnhanceCheck.checked; }
 
-  // Apply/remove free-mode UI constraints
-  function applyFreeMode(isFree) {
-    if (isFree) {
-      // Lock slider to 2x
-      slider.value = '2';
-      slider.max = '2';
-      scaleValue.textContent = '2x';
-      slider.classList.add('opacity-50', 'pointer-events-none');
-      // Lock face enhance
-      faceEnhanceCheck.checked = false;
-      faceEnhanceCheck.disabled = true;
-      faceEnhanceCheck.closest('label').classList.add('opacity-40', 'pointer-events-none');
-      // Update GPU button label
-      if (canvasBtn) canvasBtn.textContent = '⚡ GPU (Miễn phí)';
-      // Update dropzone hint
-      if (dzSubtext) dzSubtext.textContent = 'GPU miễn phí: chỉ 1 ảnh, tối đa 2x';
-    } else {
-      // Unlock slider
-      slider.max = '6';
-      slider.value = '4';
-      scaleValue.textContent = '4x';
-      slider.classList.remove('opacity-50', 'pointer-events-none');
-      // Unlock face enhance
-      faceEnhanceCheck.disabled = false;
-      faceEnhanceCheck.closest('label').classList.remove('opacity-40', 'pointer-events-none');
-      // Update GPU button label
-      if (canvasBtn) canvasBtn.textContent = '⚡ GPU (trả phí)';
-      // Update dropzone hint
-      if (dzSubtext) dzSubtext.textContent = 'JPG, PNG, WebP — Tối đa 5 ảnh, mỗi ảnh dưới 5MB';
-    }
-    renderPreview(); // re-render to apply overlay warnings
-  }
+  // isFreeMode() returns activeTool === 'canvas-free'
 
-  if (freeGpuCheck) {
-    freeGpuCheck.addEventListener('change', () => applyFreeMode(freeGpuCheck.checked));
-  }
 
   ['dragenter','dragover'].forEach(evt => dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.add('border-brand-500'); }));
   ['dragleave','drop'].forEach(evt => dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.remove('border-brand-500'); }));
@@ -964,7 +1190,7 @@ function setupUploadAndProcess(canvasQuota) {
 
   function addFiles(fileList) {
     const arr = Array.from(fileList).filter(f => f.type.startsWith('image/'));
-    const limit = isFreeMode() ? FREE_MAX : MAX_IMAGES;
+    const limit = (window.activeTool === 'canvas-free') ? FREE_MAX : MAX_IMAGES;
     const remaining = limit - images.length;
     arr.slice(0, remaining).forEach(f => {
       images.push({ file: f, name: f.name, url: URL.createObjectURL(f), resultURL: null, status: 'waiting', errorMsg: '' });
@@ -1007,8 +1233,6 @@ function setupUploadAndProcess(canvasQuota) {
     const hasImages = images.length > 0;
     processBtn.disabled = !hasImages;
     if (canvasBtn) canvasBtn.disabled = !hasImages;
-    const hasDone = images.some(i => i.status === 'done');
-    downloadBtn.disabled = !hasDone;
   }
 
   function renderPreview() {
@@ -1084,7 +1308,69 @@ function setupUploadAndProcess(canvasQuota) {
       a.download = images[i].name.replace(/\.[^.]+$/, '') + '-upscaled.jpg';
       a.click();
     };
+
+    // ─── ZIP download button (rendered inline after grid) ─────────────────────
+    const hasDoneImages = images.some(img => img.status === 'done');
+    let zipBar = document.getElementById('zipDownloadBar');
+    if (!zipBar) {
+      zipBar = document.createElement('div');
+      zipBar.id = 'zipDownloadBar';
+      previewBody.appendChild(zipBar);
+    }
+    if (hasDoneImages) {
+      const doneCount = images.filter(i => i.status === 'done').length;
+      zipBar.innerHTML = `
+        <div class="mt-3 flex items-center gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+          <button onclick="window.__toolDownloadZip()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-sm font-bold shadow transition-all">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Tải tất cả (.zip)
+          </button>
+          <span class="text-xs text-emerald-700 dark:text-emerald-400 font-medium">${doneCount} ảnh đã xử lý xong</span>
+        </div>`;
+    } else {
+      zipBar.innerHTML = '';
+    }
   }
+
+  // ─── ZIP archive builder ──────────────────────────────────────────────────────
+  window.__toolDownloadZip = async () => {
+    const done = images.filter(i => i.status === 'done' && i.resultURL);
+    if (!done.length) return;
+    if (typeof JSZip === 'undefined') {
+      alert('JSZip chưa tải xong, vui lòng thử lại sau vài giây.'); return;
+    }
+    progress.textContent = 'Đang nén file ZIP…';
+    try {
+      const zip = new JSZip();
+      for (let idx = 0; idx < done.length; idx++) {
+        const img = done[idx];
+        progress.textContent = `Đang nén ảnh ${idx + 1}/${done.length}…`;
+        const baseName = img.name.replace(/\.[^.]+$/, '') + '-upscaled.jpg';
+        if (img.resultURL.startsWith('data:')) {
+          // Canvas GPU result — data URL, convert base64 directly
+          const base64 = img.resultURL.split(',')[1];
+          zip.file(baseName, base64, { base64: true });
+        } else {
+          // AI result — fetch from Replicate CDN URL
+          const resp = await fetch(img.resultURL);
+          if (!resp.ok) throw new Error(`Không tải được ảnh: ${baseName}`);
+          const blob = await resp.blob();
+          zip.file(baseName, blob);
+        }
+      }
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'xuongnet-upscaled.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+      progress.textContent = `✓ Đã tải ${done.length} ảnh (ZIP).`;
+    } catch(err) {
+      progress.textContent = 'Lỗi tạo ZIP: ' + err.message;
+    }
+  };
 
   function fileToDataURL(file) {
     return new Promise((resolve, reject) => {
@@ -1097,119 +1383,97 @@ function setupUploadAndProcess(canvasQuota) {
 
   processBtn.addEventListener('click', async () => {
     if (!images.length) return;
-    const scale = getScale();
-    const face_enhance = getFaceEnhance();
 
-    const toProcess = images.filter(i => i.status === 'waiting' || i.status === 'error');
-    if (!toProcess.length) { progress.textContent = 'Không có ảnh nào cần xử lý.'; return; }
-
-    processBtn.disabled = true;
-    if (canvasBtn) canvasBtn.disabled = true;
-
-    let successCount = 0, failCount = 0;
-    for (let i = 0; i < images.length; i++) {
-      if (images[i].status !== 'waiting' && images[i].status !== 'error') continue;
-      images[i].status = 'processing';
-      renderPreview();
-      progress.textContent = `Đang xử lý ảnh ${i+1}/${images.length}…`;
-      try {
-        const dataUrl = await fileToDataURL(images[i].file);
-        const data = await api('/upscale', { method: 'POST', body: { image: dataUrl, scale, face_enhance } });
-        images[i].resultURL = data.outputUrl;
-        images[i].status = 'done';
-        currentUser.credits = data.creditsRemaining;
-        renderHeader();
-        successCount++;
-      } catch(err) {
-        images[i].status = 'error';
-        images[i].errorMsg = err.message;
-        failCount++;
-      }
-      renderPreview();
-    }
-
-    progress.textContent = `Hoàn tất ${successCount} ảnh${failCount ? `, lỗi ${failCount} ảnh` : ''}.`;
-    updateActionButtons();
-    loadTxHistory && loadTxHistory();
-  });
-
-  if (canvasBtn) {
-    canvasBtn.addEventListener('click', async () => {
-      if (!images.length) return;
+    // ── Canvas GPU modes ────────────────────────────────────────────────────────
+    if (window.activeTool === 'canvas-paid' || window.activeTool === 'canvas-free') {
+      const mode = window.activeTool === 'canvas-free' ? 'free' : 'paid';
       const scale = getScale();
-      const face_enhance = getFaceEnhance();
-      const mode = isFreeMode() ? 'free' : 'paid';
-
-      // Validation
-      if (mode === 'free') {
-        const activeImages = images.filter((_, i) => i < FREE_MAX);
-        if (!activeImages.length) { progress.textContent = 'Chưa có ảnh hợp lệ.'; return; }
-      }
-      if (face_enhance) {
-        alert('Tối ưu khuôn mặt chỉ hỗ trợ trên AI Real-ESRGAN.'); return;
-      }
-      if (mode === 'paid') {
-        const processCount = images.filter(i => i.status === 'waiting' || i.status === 'error').length;
-        if (currentUser.role !== 'admin' && currentUser.credits < canvasQuota.creditCost * processCount) {
-          alert(`Không đủ credit. Cần ${canvasQuota.creditCost * processCount} credit cho ${processCount} ảnh.`); return;
-        }
-      }
-
-      // Only process images within limit
       const maxIdx = mode === 'free' ? FREE_MAX : MAX_IMAGES;
       const toProcess = images.slice(0, maxIdx).filter(i => i.status === 'waiting' || i.status === 'error');
       if (!toProcess.length) { progress.textContent = 'Không có ảnh nào cần xử lý.'; return; }
-
+      if (mode === 'paid' && currentUser?.role !== 'admin' && (currentUser?.credits || 0) < canvasQuota.creditCost * toProcess.length) {
+        progress.textContent = `Không đủ credit. Cần ${canvasQuota.creditCost * toProcess.length} credit.`; return;
+      }
       processBtn.disabled = true;
-      canvasBtn.disabled = true;
-
       let successCount = 0, failCount = 0;
       for (let i = 0; i < Math.min(images.length, maxIdx); i++) {
         if (images[i].status !== 'waiting' && images[i].status !== 'error') continue;
         images[i].status = 'processing';
         renderPreview();
-        progress.textContent = `GPU đang xử lý ảnh ${i+1}...…`;
+        progress.textContent = `⚡ GPU đang xử lý ảnh ${i + 1}…`;
         try {
           const resultDataUrl = await canvasUpscale(images[i].file, scale);
           const data = await api('/wallet/canvas-done', { method: 'POST', body: { mode } });
           images[i].resultURL = resultDataUrl;
           images[i].status = 'done';
           currentUser.credits = data.userCredits;
-          if (mode === 'free') canvasQuota.remainingFree = data.remainingFree;
+          if (mode === 'free') {
+            canvasQuota.remainingFree = data.remainingFree;
+            const ql = document.getElementById('canvasQuotaLabel');
+            if (ql) ql.textContent = data.remainingFree > 0
+              ? data.remainingFree + '/' + canvasQuota.freePerDay + ' lượt'
+              : 'Hết lượt';
+          }
           renderHeader();
           successCount++;
-        } catch(err) {
+        } catch (err) {
           images[i].status = 'error';
           images[i].errorMsg = err.message;
           failCount++;
         }
         renderPreview();
       }
-
-      progress.textContent = `GPU hoàn tất ${successCount} ảnh${failCount ? `, lỗi ${failCount} ảnh` : ''}.`;
-
-      const quotaLabel = document.getElementById('canvasQuotaLabel');
-      if (quotaLabel) {
-        quotaLabel.textContent = canvasQuota.remainingFree > 0
-          ? canvasQuota.remainingFree + '/' + canvasQuota.freePerDay + ' lượt miễn phí'
-          : 'Hết miễn phí';
-      }
-
+      progress.textContent = `⚡ GPU hoàn tất ${successCount} ảnh${failCount ? `, lỗi ${failCount}` : ''}.`;
       updateActionButtons();
       loadTxHistory && loadTxHistory();
-    });
-  }
+      return;
+    }
 
-  downloadBtn.addEventListener('click', () => {
-    images.filter(i => i.status === 'done').forEach((img, idx) => {
-      setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = img.resultURL;
-        a.download = img.name.replace(/\.[^.]+$/, '') + '-upscaled.jpg';
-        a.click();
-      }, idx * 300);
-    });
+    // ── AI model modes (realesrgan / gfpgan) ────────────────────────────────────
+    const scale = getScale();
+    const face_enhance = getFaceEnhance();
+    const toProcess = images.filter(i => i.status === 'waiting' || i.status === 'error');
+    if (!toProcess.length) { progress.textContent = 'Không có ảnh nào cần xử lý.'; return; }
+
+    processBtn.disabled = true;
+    let successCount = 0, failCount = 0;
+    for (let i = 0; i < images.length; i++) {
+      if (images[i].status !== 'waiting' && images[i].status !== 'error') continue;
+      images[i].status = 'processing';
+      renderPreview();
+      progress.textContent = `✨ AI đang xử lý ảnh ${i + 1}/${images.length}…`;
+      try {
+        const dataUrl = await fileToDataURL(images[i].file);
+        let data;
+        if (window.activeTool === 'gfpgan') {
+          const gfpSlider = document.getElementById('gfpScaleSlider');
+          const gfpScale = gfpSlider ? parseFloat(gfpSlider.value) : 2;
+          const gfpVersionEl = document.querySelector('input[name="gfpVersion"]:checked');
+          const gfpVersion = gfpVersionEl ? gfpVersionEl.value : 'v1.4';
+          data = await api('/upscale/gfpgan', { method: 'POST', body: { image: dataUrl, scale: gfpScale, version: gfpVersion } });
+        } else {
+          data = await api('/upscale', { method: 'POST', body: { image: dataUrl, scale, face_enhance } });
+        }
+        images[i].resultURL = data.outputUrl;
+        images[i].status = 'done';
+        currentUser.credits = data.creditsRemaining;
+        renderHeader();
+        successCount++;
+      } catch (err) {
+        images[i].status = 'error';
+        images[i].errorMsg = err.message;
+        failCount++;
+      }
+      renderPreview();
+    }
+    progress.textContent = `✨ Hoàn tất ${successCount} ảnh${failCount ? `, lỗi ${failCount}` : ''}.`;
+    updateActionButtons();
+    loadTxHistory && loadTxHistory();
   });
+
+  // Canvas GPU handler merged into unified processBtn above
+
+  // Batch download handled via __toolDownloadZip rendered in previewBody
 }
 
 function setupDepositModal(){
@@ -1268,8 +1532,8 @@ async function renderAdminView(app){
     noindex: true
   });
   app.innerHTML = `<div class="text-sm text-slate-500 py-20 text-center">Đang tải…</div>`;
-  const [stats, settings, users, txs, usage] = await Promise.all([
-    api('/admin/stats'), api('/admin/settings'), api('/admin/users'), api('/admin/transactions'), api('/admin/usage')
+  const [stats, settings, users, txs, usage, pendingDeposits, coupons] = await Promise.all([
+    api('/admin/stats'), api('/admin/settings'), api('/admin/users'), api('/admin/transactions'), api('/admin/usage'), api('/admin/deposits/pending'), api('/admin/coupons')
   ]);
 
   function statCard(label, value){
@@ -1285,6 +1549,8 @@ async function renderAdminView(app){
         <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="users"><i data-lucide="users" class="w-4 h-4"></i> Người dùng</button>
         <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="transactions"><i data-lucide="credit-card" class="w-4 h-4"></i> Giao dịch</button>
         <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="usage"><i data-lucide="image" class="w-4 h-4"></i> Nâng cấp AI</button>
+        <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="deposits"><i data-lucide="wallet" class="w-4 h-4"></i> Duyệt nạp tiền</button>
+        <button class="admin-tab-btn w-full text-left px-4 py-2.5 rounded-lg text-sm flex items-center gap-3 font-medium transition-colors" data-tab="coupons"><i data-lucide="gift" class="w-4 h-4"></i> Mã Khuyến Mãi</button>
       </div>
       <div class="flex-grow w-full min-w-0" id="adminContent"></div>
     </div>
@@ -1327,7 +1593,7 @@ async function renderAdminView(app){
         <div class="overflow-x-auto">
           <table class="w-full text-xs">
             <thead><tr class="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-              <th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Vai trò</th><th class="py-2 pr-3">Credit</th><th class="py-2 pr-3">Ngày tạo</th><th class="py-2 pr-3">Chi tiết</th><th class="py-2">Điều chỉnh</th>
+              <th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Vai trò</th><th class="py-2 pr-3">Credit</th><th class="py-2 pr-3">Ngày tạo</th><th class="py-2 pr-3">Trạng thái</th><th class="py-2 pr-3">Chi tiết</th><th class="py-2">Điều chỉnh</th>
             </tr></thead>
             <tbody>
               ${users.items.map(u=>`
@@ -1338,6 +1604,9 @@ async function renderAdminView(app){
                   </td>
                   <td class="py-2 pr-3 font-semibold text-brand-600 dark:text-brand-400">${u.credits}</td>
                   <td class="py-2 pr-3 text-slate-400">${new Date(u.created_at).toLocaleDateString('vi-VN')}</td>
+                  <td class="py-2 pr-3">
+                    <button class="ban-btn px-2 py-1 rounded text-[10px] font-semibold border transition-colors ${u.is_banned ? 'border-red-400 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-slate-200 text-slate-500 hover:border-slate-400'}" data-id="${u.id}">${u.is_banned ? 'Đã khóa' : 'Hoạt động'}</button>
+                  </td>
                   <td class="py-2 pr-3">
                     <button class="user-detail-btn text-xs px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors flex items-center gap-1" data-id="${u.id}" data-email="${u.email}">
                       <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1374,6 +1643,64 @@ async function renderAdminView(app){
             <span class="text-slate-400">${u.credits_charged} credit</span>
           </div>`).join('') || '<div class="text-slate-400">Chưa có.</div>'}
         </div>
+      </div>
+    `,
+    deposits: () => `
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold mb-4">Giao dịch nạp tiền đang chờ (${pendingDeposits.items.length})</h3>
+        <div class="space-y-2 text-xs">
+          ${pendingDeposits.items.map(t=>`<div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <div class="font-medium">${t.email}</div>
+              <div class="text-slate-500">Mã: <span class="font-mono text-brand-600">${t.code}</span> · Số tiền: ${t.amount_vnd.toLocaleString('vi-VN')}đ (${t.credits_delta} credit)</div>
+              <div class="text-[10px] text-slate-400">${new Date(t.created_at).toLocaleString('vi-VN')}</div>
+            </div>
+            <button class="approve-btn px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 rounded font-semibold transition-colors" data-id="${t.id}">Duyệt tay</button>
+          </div>`).join('') || '<div class="text-slate-400">Không có giao dịch đang chờ.</div>'}
+        </div>
+      </div>
+    `,
+    coupons: () => `
+      <div class="card p-5 mb-5">
+        <h3 class="text-sm font-semibold mb-4">Tạo mã khuyến mãi mới</h3>
+        <div class="grid sm:grid-cols-4 gap-3 items-end">
+          <label class="text-xs">
+            <div class="text-slate-500 mb-1">Mã Code (vd: VIP2026)</div>
+            <input id="c_code" type="text" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
+          </label>
+          <label class="text-xs">
+            <div class="text-slate-500 mb-1">Số credit</div>
+            <input id="c_credits" type="number" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
+          </label>
+          <label class="text-xs">
+            <div class="text-slate-500 mb-1">Lượt dùng tối đa (bỏ trống = vô hạn)</div>
+            <input id="c_max" type="number" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2">
+          </label>
+          <button id="createCouponBtn" class="px-4 py-2 rounded-lg text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 h-[34px]">Tạo mã</button>
+        </div>
+      </div>
+      <div class="card p-5">
+        <h3 class="text-sm font-semibold mb-4">Danh sách mã</h3>
+        <table class="w-full text-xs text-left">
+          <thead><tr class="text-slate-500 border-b border-slate-200 dark:border-slate-800">
+            <th class="py-2 pr-3">Mã</th><th class="py-2 pr-3">Credit</th><th class="py-2 pr-3">Lượt dùng</th><th class="py-2 pr-3">Trạng thái</th><th class="py-2">Tắt/Bật</th>
+          </tr></thead>
+          <tbody>
+            ${coupons.items.map(c=>`
+              <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="py-2 pr-3 font-mono font-bold text-brand-600">${c.code}</td>
+                <td class="py-2 pr-3 text-emerald-600">+${c.credits}</td>
+                <td class="py-2 pr-3">${c.used_count} / ${c.max_uses || '∞'}</td>
+                <td class="py-2 pr-3"><span class="${c.is_active ? 'text-emerald-500' : 'text-slate-400'}">${c.is_active ? 'Hoạt động' : 'Tạm dừng'}</span></td>
+                <td class="py-2">
+                  <button class="toggle-coupon-btn px-2 py-1 rounded border ${c.is_active ? 'border-red-400 text-red-500 hover:bg-red-50' : 'border-brand-400 text-brand-600 hover:bg-brand-50'} transition-colors" data-id="${c.id}">
+                    ${c.is_active ? 'Tạm dừng' : 'Kích hoạt'}
+                  </button>
+                </td>
+              </tr>
+            `).join('') || '<tr><td colspan="5" class="py-4 text-slate-400">Chưa có mã nào.</td></tr>'}
+          </tbody>
+        </table>
       </div>
     `
   };
@@ -1422,8 +1749,45 @@ async function renderAdminView(app){
           }catch(err){ alert(err.message); }
         };
       });
+      document.querySelectorAll('.ban-btn').forEach(btn=>{
+        btn.onclick = async ()=>{
+          try{
+            await api('/admin/users/'+btn.dataset.id+'/toggle-ban', { method:'POST' });
+            renderAdminView(app);
+          }catch(e){ alert(e.message); }
+        }
+      });
       document.querySelectorAll('.user-detail-btn').forEach(btn=>{
         btn.onclick = ()=> openUserDetailModal(parseInt(btn.dataset.id, 10), btn.dataset.email);
+      });
+    } else if (tabId === 'deposits') {
+      document.querySelectorAll('.approve-btn').forEach(btn=>{
+        btn.onclick = async ()=>{
+          if(!confirm('Xác nhận đã nhận đủ tiền và cộng credit cho user?')) return;
+          try{
+            await api('/admin/deposits/'+btn.dataset.id+'/approve', { method:'POST' });
+            renderAdminView(app);
+          }catch(e){ alert(e.message); }
+        };
+      });
+    } else if (tabId === 'coupons') {
+      document.getElementById('createCouponBtn').onclick = async ()=>{
+        try{
+          await api('/admin/coupons', { method:'POST', body:{
+            code: document.getElementById('c_code').value,
+            credits: document.getElementById('c_credits').value,
+            max_uses: document.getElementById('c_max').value
+          }});
+          renderAdminView(app);
+        }catch(e){ alert(e.message); }
+      };
+      document.querySelectorAll('.toggle-coupon-btn').forEach(btn=>{
+        btn.onclick = async ()=>{
+          try{
+            await api('/admin/coupons/'+btn.dataset.id+'/toggle', { method:'POST' });
+            renderAdminView(app);
+          }catch(e){ alert(e.message); }
+        };
       });
     }
   }

@@ -1,4 +1,4 @@
-// Lớp dữ liệu duy nhất của toàn bộ app — dùng SQLite qua module `node:sqlite`
+﻿// Lớp dữ liệu duy nhất của toàn bộ app — dùng SQLite qua module `node:sqlite`
 // có SẴN TRONG NODE.JS (từ bản 22.5+), KHÔNG cần cài package native nào,
 // KHÔNG cần biên dịch C++ — tránh hẳn lỗi build better-sqlite3 hay gặp trên
 // Windows khi thiếu đúng bộ Visual Studio Build Tools tương thích.
@@ -36,23 +36,26 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'user',      -- 'user' | 'admin'
-  credits INTEGER NOT NULL DEFAULT 0,     -- số dư hiện tại, được cập nhật cùng lúc với mỗi giao dịch trong wallet_transactions
+  password_hash TEXT,
+  google_id TEXT UNIQUE,
+  avatar_url TEXT,
+  role TEXT NOT NULL DEFAULT 'user',
+  credits INTEGER NOT NULL DEFAULT 0,
+  is_banned INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS wallet_transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
-  type TEXT NOT NULL,                     -- 'deposit' | 'admin_adjust' | 'usage'
-  status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'completed' | 'failed'
-  credits_delta INTEGER NOT NULL,         -- dương = cộng, âm = trừ
-  amount_vnd INTEGER,                     -- chỉ có với type='deposit'
-  code TEXT,                              -- mã nội dung chuyển khoản, dùng để đối soát webhook
-  provider TEXT,                          -- 'sepay' | 'pay2s' | 'admin' | null
+  type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  credits_delta INTEGER NOT NULL,
+  amount_vnd INTEGER,
+  code TEXT,
+  provider TEXT,
   note TEXT,
-  raw_webhook TEXT,                       -- lưu nguyên payload webhook để tra soát sau này
+  raw_webhook TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at TEXT
 );
@@ -63,7 +66,11 @@ CREATE TABLE IF NOT EXISTS usage_logs (
   credits_charged INTEGER NOT NULL,
   scale INTEGER,
   face_enhance INTEGER,
-  status TEXT NOT NULL,                   -- 'succeeded' | 'failed'
+  detail_level INTEGER DEFAULT 50,
+  repair_text INTEGER DEFAULT 0,
+  repair_level INTEGER DEFAULT 0,
+  model_used TEXT,
+  status TEXT NOT NULL,
   output_url TEXT,
   error TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -72,8 +79,8 @@ CREATE TABLE IF NOT EXISTS usage_logs (
 CREATE TABLE IF NOT EXISTS canvas_upscale_daily (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
-  used_date TEXT NOT NULL,                -- date('now') — ngày dùng (YYYY-MM-DD)
-  count INTEGER NOT NULL DEFAULT 1,       -- số lần đã dùng trong ngày đó
+  used_date TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, used_date)
 );
@@ -83,16 +90,49 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT UNIQUE NOT NULL,
+  credits INTEGER NOT NULL,
+  max_uses INTEGER,
+  used_count INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code_id INTEGER NOT NULL REFERENCES promo_codes(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(code_id, user_id)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_tx_code ON wallet_transactions(code) WHERE code IS NOT NULL;
 `);
 
-// ---------- settings (giá cả, quy đổi — admin chỉnh được qua dashboard) ----------
+// Migration an toàn: thêm cột mới vào bảng cũ nếu cần (idempotent khi restart)
+function addColumnIfMissing(table, column, definition) {
+  try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`); }
+  catch { /* column already exists */ }
+}
+addColumnIfMissing('users', 'google_id', 'TEXT');
+addColumnIfMissing('users', 'avatar_url', 'TEXT');
+addColumnIfMissing('users', 'is_banned', 'INTEGER NOT NULL DEFAULT 0');
+addColumnIfMissing('usage_logs', 'detail_level', 'INTEGER DEFAULT 50');
+addColumnIfMissing('usage_logs', 'repair_text', 'INTEGER DEFAULT 0');
+addColumnIfMissing('usage_logs', 'repair_level', 'INTEGER DEFAULT 0');
+addColumnIfMissing('usage_logs', 'model_used', 'TEXT');
+
+// ---------- settings ----------
 const defaultSettings = {
   vnd_per_credit: process.env.VND_PER_CREDIT || '1000',
   credits_per_upscale: process.env.CREDITS_PER_UPSCALE || '5',
   min_deposit_vnd: process.env.MIN_DEPOSIT_VND || '10000',
-  canvas_free_per_day: '1',               // số lần dùng Canvas/GPU miễn phí mỗi ngày
-  credits_per_canvas_upscale: '1',        // credit tốn mỗi lần Canvas trả phí
+  canvas_free_per_day: '1',
+  credits_per_canvas_upscale: '1',
 };
 const insertSettingIfMissing = db.prepare(
   `INSERT INTO settings (key, value) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = ?)`
@@ -117,14 +157,17 @@ export function getAllSettings() {
 // ---------- users ----------
 export const stmt = {
   createUser: db.prepare(
-    `INSERT INTO users (email, password_hash, role, credits) VALUES (?, ?, ?, ?)`
+    `INSERT INTO users (email, password_hash, google_id, avatar_url, role, credits) VALUES (?, ?, ?, ?, ?, ?)`
   ),
   findUserByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
   findUserById: db.prepare(`SELECT * FROM users WHERE id = ?`),
-  listUsers: db.prepare(`SELECT id, email, role, credits, created_at FROM users ORDER BY id DESC LIMIT ? OFFSET ?`),
+  findUserByGoogleId: db.prepare(`SELECT * FROM users WHERE google_id = ?`),
+  listUsers: db.prepare(`SELECT id, email, role, credits, google_id, avatar_url, is_banned, created_at FROM users ORDER BY id DESC LIMIT ? OFFSET ?`),
   countUsers: db.prepare(`SELECT COUNT(*) AS n FROM users`),
   updateUserCredits: db.prepare(`UPDATE users SET credits = credits + ? WHERE id = ?`),
   updatePassword: db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`),
+  updateGoogleId: db.prepare(`UPDATE users SET google_id = ?, avatar_url = ? WHERE id = ?`),
+  banUser: db.prepare(`UPDATE users SET is_banned = ? WHERE id = ?`),
 
   insertTx: db.prepare(
     `INSERT INTO wallet_transactions (user_id, type, status, credits_delta, amount_vnd, code, provider, note, raw_webhook, completed_at)
@@ -145,12 +188,12 @@ export const stmt = {
     `SELECT wt.*, u.email FROM wallet_transactions wt JOIN users u ON u.id = wt.user_id ORDER BY wt.id DESC LIMIT ? OFFSET ?`
   ),
   findAllPendingDeposits: db.prepare(
-    `SELECT * FROM wallet_transactions WHERE type = 'deposit' AND status = 'pending'`
+    `SELECT wt.*, u.email FROM wallet_transactions wt JOIN users u ON u.id = wt.user_id WHERE wt.type = 'deposit' AND wt.status = 'pending' ORDER BY wt.id DESC`
   ),
 
   insertUsage: db.prepare(
-    `INSERT INTO usage_logs (user_id, credits_charged, scale, face_enhance, status, output_url, error)
-     VALUES (@user_id, @credits_charged, @scale, @face_enhance, @status, @output_url, @error)`
+    `INSERT INTO usage_logs (user_id, credits_charged, scale, face_enhance, detail_level, repair_text, repair_level, model_used, status, output_url, error)
+     VALUES (@user_id, @credits_charged, @scale, @face_enhance, @detail_level, @repair_text, @repair_level, @model_used, @status, @output_url, @error)`
   ),
   listUsageForUser: db.prepare(
     `SELECT * FROM usage_logs WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?`
@@ -166,7 +209,7 @@ export const stmt = {
     `SELECT COALESCE(SUM(credits_delta),0) AS total FROM wallet_transactions WHERE status='completed' AND credits_delta > 0`
   ),
   statsCreditsSpent: db.prepare(
-    `SELECT COALESCE(SUM(-credits_delta),0) AS total FROM wallet_transactions WHERE type='usage' AND status='completed'`
+    `SELECT COALESCE(SUM(-credits_delta),0) AS total FROM wallet_transactions WHERE type IN ('usage','canvas_usage') AND status='completed'`
   ),
   statsUpscalesToday: db.prepare(
     `SELECT COUNT(*) AS n FROM usage_logs WHERE status='succeeded' AND date(created_at) = date('now')`
@@ -181,6 +224,18 @@ export const stmt = {
      VALUES (?, date('now'), 1)
      ON CONFLICT(user_id, used_date) DO UPDATE SET count = count + 1`
   ),
+
+  // Promo codes
+  findPromoByCode: db.prepare(`SELECT * FROM promo_codes WHERE code = ? AND is_active = 1`),
+  findRedemption: db.prepare(`SELECT * FROM promo_redemptions WHERE code_id = ? AND user_id = ?`),
+  insertRedemption: db.prepare(`INSERT INTO promo_redemptions (code_id, user_id) VALUES (?, ?)`),
+  incrementPromoUses: db.prepare(`UPDATE promo_codes SET used_count = used_count + 1 WHERE id = ?`),
+  listPromoCodes: db.prepare(`SELECT * FROM promo_codes ORDER BY id DESC LIMIT ? OFFSET ?`),
+  countPromoCodes: db.prepare(`SELECT COUNT(*) AS n FROM promo_codes`),
+  insertPromoCode: db.prepare(
+    `INSERT INTO promo_codes (code, credits, max_uses, expires_at, is_active, note) VALUES (?, ?, ?, ?, 1, ?)`
+  ),
+  togglePromoCode: db.prepare(`UPDATE promo_codes SET is_active = ? WHERE id = ?`),
 };
 
 // Cộng/trừ credit và ghi sổ trong CÙNG một transaction SQLite để không bao giờ lệch số dư.
