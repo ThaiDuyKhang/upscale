@@ -1,4 +1,4 @@
-﻿// Lớp dữ liệu duy nhất của toàn bộ app — dùng SQLite qua module `node:sqlite`
+// Lớp dữ liệu duy nhất của toàn bộ app — dùng SQLite qua module `node:sqlite`
 // có SẴN TRONG NODE.JS (từ bản 22.5+), KHÔNG cần cài package native nào,
 // KHÔNG cần biên dịch C++ — tránh hẳn lỗi build better-sqlite3 hay gặp trên
 // Windows khi thiếu đúng bộ Visual Studio Build Tools tương thích.
@@ -108,6 +108,54 @@ CREATE TABLE IF NOT EXISTS promo_redemptions (
   user_id INTEGER NOT NULL REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(code_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT,
+  seo_title TEXT,
+  seo_description TEXT,
+  focus_keyword TEXT,
+  schema_json TEXT,
+  thumbnail_url TEXT,
+  is_published INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS post_categories (
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  PRIMARY KEY(post_id, category_id)
+);
+
+CREATE TABLE IF NOT EXISTS post_tags (
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY(post_id, tag_id)
+);
+
+CREATE TABLE IF NOT EXISTS media (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  filename TEXT NOT NULL,
+  url TEXT NOT NULL,
+  mimetype TEXT,
+  size INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_tx_code ON wallet_transactions(code) WHERE code IS NOT NULL;
@@ -236,7 +284,93 @@ export const stmt = {
     `INSERT INTO promo_codes (code, credits, max_uses, expires_at, is_active, note) VALUES (?, ?, ?, ?, 1, ?)`
   ),
   togglePromoCode: db.prepare(`UPDATE promo_codes SET is_active = ? WHERE id = ?`),
+  
+  // Blog / Posts
+  insertCategory: db.prepare(`INSERT INTO categories (slug, name) VALUES (?, ?)`),
+  updateCategory: db.prepare(`UPDATE categories SET slug = ?, name = ? WHERE id = ?`),
+  deleteCategory: db.prepare(`DELETE FROM categories WHERE id = ?`),
+  listCategories: db.prepare(`SELECT * FROM categories ORDER BY name ASC`),
+  
+  insertTag: db.prepare(`INSERT INTO tags (slug, name) VALUES (?, ?)`),
+  updateTag: db.prepare(`UPDATE tags SET slug = ?, name = ? WHERE id = ?`),
+  deleteTag: db.prepare(`DELETE FROM tags WHERE id = ?`),
+  listTags: db.prepare(`SELECT * FROM tags ORDER BY name ASC`),
+  
+  insertPost: db.prepare(`
+    INSERT INTO posts (slug, title, content, seo_title, seo_description, focus_keyword, schema_json, thumbnail_url, is_published)
+    VALUES (@slug, @title, @content, @seo_title, @seo_description, @focus_keyword, @schema_json, @thumbnail_url, @is_published)
+  `),
+  updatePost: db.prepare(`
+    UPDATE posts SET 
+      slug = @slug, title = @title, content = @content, 
+      seo_title = @seo_title, seo_description = @seo_description, 
+      focus_keyword = @focus_keyword, schema_json = @schema_json, 
+      thumbnail_url = @thumbnail_url, is_published = @is_published,
+      updated_at = datetime('now')
+    WHERE id = @id
+  `),
+  deletePost: db.prepare(`DELETE FROM posts WHERE id = ?`),
+  findPostById: db.prepare(`SELECT * FROM posts WHERE id = ?`),
+  findPostBySlug: db.prepare(`SELECT * FROM posts WHERE slug = ?`),
+  listPosts: db.prepare(`
+    SELECT id, slug, title, thumbnail_url, is_published, created_at, updated_at, seo_title, seo_description, focus_keyword
+    FROM posts ORDER BY created_at DESC LIMIT ? OFFSET ?
+  `),
+  listPublishedPosts: db.prepare(`
+    SELECT id, slug, title, thumbnail_url, created_at, seo_description 
+    FROM posts WHERE is_published = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?
+  `),
+  countPosts: db.prepare(`SELECT COUNT(*) AS n FROM posts`),
+  countPublishedPosts: db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE is_published = 1`),
+  
+  // Post relations
+  insertPostCategory: db.prepare(`INSERT OR IGNORE INTO post_categories (post_id, category_id) VALUES (?, ?)`),
+  deletePostCategories: db.prepare(`DELETE FROM post_categories WHERE post_id = ?`),
+  getPostCategories: db.prepare(`
+    SELECT c.* FROM categories c 
+    JOIN post_categories pc ON c.id = pc.category_id 
+    WHERE pc.post_id = ?
+  `),
+  
+  insertPostTag: db.prepare(`INSERT OR IGNORE INTO post_tags (post_id, tag_id) VALUES (?, ?)`),
+  deletePostTags: db.prepare(`DELETE FROM post_tags WHERE post_id = ?`),
+  getPostTags: db.prepare(`
+    SELECT t.* FROM tags t 
+    JOIN post_tags pt ON t.id = pt.tag_id 
+    WHERE pt.post_id = ?
+  `),
+  
+  // Media
+  insertMedia: db.prepare(`INSERT INTO media (filename, url, mimetype, size) VALUES (?, ?, ?, ?)`),
+  listMedia: db.prepare(`SELECT * FROM media ORDER BY created_at DESC LIMIT ? OFFSET ?`),
+  countMedia: db.prepare(`SELECT COUNT(*) AS n FROM media`),
+  findMediaById: db.prepare(`SELECT * FROM media WHERE id = ?`),
+  deleteMedia: db.prepare(`DELETE FROM media WHERE id = ?`),
 };
+
+// Hàm tiện ích thao tác với bài viết (có transaction)
+export function savePost(post, categoryIds = [], tagIds = []) {
+  return runInTransaction(() => {
+    let postId = post.id;
+    if (postId) {
+      stmt.updatePost.run(post);
+      stmt.deletePostCategories.run(postId);
+      stmt.deletePostTags.run(postId);
+    } else {
+      const info = stmt.insertPost.run(post);
+      postId = info.lastInsertRowid;
+    }
+    
+    for (const cid of categoryIds) {
+      stmt.insertPostCategory.run(postId, cid);
+    }
+    for (const tid of tagIds) {
+      stmt.insertPostTag.run(postId, tid);
+    }
+    return postId;
+  });
+}
+
 
 // Cộng/trừ credit và ghi sổ trong CÙNG một transaction SQLite để không bao giờ lệch số dư.
 export function creditUser({ userId, delta, type, status = 'completed', amountVnd = null, code = null, provider = null, note = null, rawWebhook = null }) {
